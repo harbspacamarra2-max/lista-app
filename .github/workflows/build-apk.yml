@@ -1,0 +1,77 @@
+name: Build Lista APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Check Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          ls "$ANDROID_HOME" || true
+
+      - name: Install packages
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee npm.log || { echo "::error title=npm ci failed::$(tail -40 npm.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"; exit 1; }
+
+      - name: Generate Android project
+        run: |
+          set -o pipefail
+          npx expo prebuild --platform android --no-install 2>&1 | tee prebuild.log || { echo "::error title=prebuild failed::$(tail -40 prebuild.log | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"; exit 1; }
+        env:
+          EXPO_NO_TELEMETRY: 1
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a 2>&1 | tee ../gradle.log || { echo "::error title=Gradle build failed::$(grep -E 'error|Error|FAILED|What went wrong' -A3 ../gradle.log | tail -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"; exit 1; }
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk out/Lista.apk
+          ls -la out
+
+      - name: Upload APK (Actions artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Lista-APK
+          path: out/Lista.apk
+
+      - name: Publish APK to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Lista v1.0 (build ${{ github.run_number }})
+          body: |
+            Download **Lista.apk** below and open it on your Android phone to install.
+            If asked, allow your browser to "Install unknown apps".
+          files: out/Lista.apk
+          make_latest: true
