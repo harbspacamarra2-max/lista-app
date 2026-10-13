@@ -15,12 +15,21 @@ jobs:
     env:
       SINOP_KEYSTORE_BASE64: ${{ secrets.SINOP_KEYSTORE_BASE64 }}
       SINOP_KEYSTORE_PASSWORD: ${{ secrets.SINOP_KEYSTORE_PASSWORD }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      EXPO_PUBLIC_GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || vars.GEMINI_API_KEY }}
+      EXPO_PUBLIC_GEMINI_KEY: ${{ secrets.GEMINI_API_KEY || vars.GEMINI_API_KEY }}
       EXPO_NO_TELEMETRY: 1
     steps:
       - name: Get the code
         uses: actions/checkout@v5
+
+      - name: Check the Gemini key
+        run: |
+          k="$(printf '%s' "$GEMINI_API_KEY" | tr -d '[:space:]')"
+          if [ -z "$k" ]; then
+            echo "::error title=Gemini key missing::GEMINI_API_KEY is empty. Add it under Settings > Secrets and variables > Actions > Repository secrets."
+            exit 1
+          fi
+          echo "::notice title=Gemini key found::length ${#k}, starts with ${k:0:4}"
 
       - name: Set up Node
         uses: actions/setup-node@v5
