@@ -3,22 +3,25 @@ import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Alert } from './alert';
 
-async function shrink(uri) {
+async function shrink(uri, withData = false) {
   const width = Platform.OS === 'web' ? 900 : 1280;
   const ctx = ImageManipulator.manipulate(uri);
   ctx.resize({ width });
   const img = await ctx.renderAsync();
-  const out = await img.saveAsync({ compress: Platform.OS === 'web' ? 0.5 : 0.65, format: SaveFormat.JPEG, base64: Platform.OS === 'web' });
-  if (Platform.OS === 'web') return `data:image/jpeg;base64,${out.base64}`;
+  const out = await img.saveAsync({ compress: Platform.OS === 'web' ? 0.5 : 0.65, format: SaveFormat.JPEG, base64: Platform.OS === 'web' || withData });
+  if (Platform.OS === 'web') {
+    const url = `data:image/jpeg;base64,${out.base64}`;
+    return withData ? { uri: url, base64: out.base64 } : url;
+  }
   const { File, Directory, Paths } = require('expo-file-system');
   const dir = new Directory(Paths.document, 'photos');
   if (!dir.exists) dir.create({ intermediates: true, idempotent: true });
   const dest = new File(dir, `p-${Date.now()}.jpg`);
   await new File(out.uri).copy(dest);
-  return dest.uri;
+  return withData ? { uri: dest.uri, base64: out.base64 } : dest.uri;
 }
 
-async function pick(fromCamera) {
+async function pick(fromCamera, withData = false) {
   if (fromCamera) {
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
@@ -29,7 +32,7 @@ async function pick(fromCamera) {
   const opts = { mediaTypes: ['images'], quality: 0.8, allowsEditing: false };
   const res = fromCamera ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
   if (res.canceled || !res.assets?.length) return null;
-  return shrink(res.assets[0].uri);
+  return shrink(res.assets[0].uri, withData);
 }
 
 export function choosePhoto() {
@@ -39,6 +42,17 @@ export function choosePhoto() {
       { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
       { text: 'Gallery', onPress: () => pick(false).then(resolve).catch(() => resolve(null)) },
       { text: 'Camera', onPress: () => pick(true).then(resolve).catch(() => resolve(null)) },
+    ]);
+  });
+}
+
+export function choosePhotoForScan() {
+  if (Platform.OS === 'web') return pick(false, true);
+  return new Promise((resolve) => {
+    Alert.alert('Scan with AI ✨', 'Snap a receipt, or pick a GCash/Maya screenshot.', [
+      { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
+      { text: 'Gallery', onPress: () => pick(false, true).then(resolve).catch(() => resolve(null)) },
+      { text: 'Camera', onPress: () => pick(true, true).then(resolve).catch(() => resolve(null)) },
     ]);
   });
 }

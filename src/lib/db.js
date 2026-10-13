@@ -648,3 +648,44 @@ export async function skipBill(db, bill) {
   await db.runAsync('UPDATE bills SET next_due = ? WHERE id = ?', next, bill.id);
   return next;
 }
+
+export async function captureForUndo(db, what, id) {
+  if (what === 'tx') {
+    return { transactions: [await db.getFirstAsync('SELECT * FROM transactions WHERE id = ?', id)].filter(Boolean) };
+  }
+  if (what === 'payment') {
+    return { debt_payments: [await db.getFirstAsync('SELECT * FROM debt_payments WHERE id = ?', id)].filter(Boolean) };
+  }
+  if (what === 'debt') {
+    return {
+      debts: [await db.getFirstAsync('SELECT * FROM debts WHERE id = ?', id)].filter(Boolean),
+      debt_payments: await db.getAllAsync('SELECT * FROM debt_payments WHERE debt_id = ?', id),
+    };
+  }
+  if (what === 'person') {
+    return {
+      people: [await db.getFirstAsync('SELECT * FROM people WHERE id = ?', id)].filter(Boolean),
+      debts: await db.getAllAsync('SELECT * FROM debts WHERE person_id = ?', id),
+      debt_payments: await db.getAllAsync('SELECT dp.* FROM debt_payments dp JOIN debts d ON d.id = dp.debt_id WHERE d.person_id = ?', id),
+    };
+  }
+  return {};
+}
+
+export async function restoreSnapshot(db, snap) {
+  await db.withTransactionAsync(async () => {
+    for (const table of ['people', 'debts', 'debt_payments', 'transactions']) {
+      for (const row of snap[table] || []) {
+        const cols = Object.keys(row);
+        await db.runAsync(
+          `INSERT OR REPLACE INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+          ...cols.map((c) => row[c])
+        );
+      }
+    }
+  });
+}
+
+export function photosIn(snap) {
+  return [...(snap.transactions || []), ...(snap.debt_payments || [])].map((r) => r.photo).filter(Boolean);
+}

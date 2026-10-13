@@ -16,6 +16,7 @@ import { PinPad, biometricsAvailable, hashPin } from '../components/lock';
 import { backupSummary, exportBackup, pickBackup, restoreBackup } from '../lib/backup';
 import { prettyDate, today } from '../lib/format';
 import { currentVersion } from '../lib/updates';
+import { aiReady, hasAiKey } from '../lib/ai';
 
 const EMOJI_CHOICES = ['☕', '🍔', '🧋', '🍕', '🚗', '⛽', '🏠', '👕', '💄', '🐶', '🎬', '🎵', '🎓', '✈️', '🏋️', '🎁', '🧾', '💻', '📦', '🙏'];
 
@@ -234,6 +235,45 @@ export default function Settings() {
           value={Number(settings.budget) ? peso(Number(settings.budget)) : 'Not set'}
           onPress={() => openEdit('budget')}
         />
+      </Group>
+
+      <Group title="Sinop AI ✨">
+        <Row style={{ paddingVertical: 12, justifyContent: 'space-between' }}>
+          <View style={{ flex: 1, paddingRight: 10 }}>
+            <Txt w={700} size={15}>Smart typing, scanning & chat</Txt>
+            <Txt size={12.5} color="sub">
+              {hasAiKey() ? 'Uses Google Gemini (free). Off = the offline brain still works.' : 'Not available in this version.'}
+            </Txt>
+          </View>
+          <Switch
+            value={aiReady(settings)}
+            disabled={!hasAiKey()}
+            trackColor={{ true: theme.brand, false: theme.border }}
+            thumbColor="#FFFFFF"
+            onValueChange={(v) => {
+              if (!v) {
+                saveSetting('ai_on', '0');
+                return;
+              }
+              Alert.alert(
+                'Before you turn it on 👀',
+                'Sinop AI uses Google Gemini on the free plan, so Google may use what you send to improve their products.\n\nTyping or scanning sends only that text or photo. Ask Sinop and AI tips also send a summary of your spending and utang.\n\nDon’t type passwords, PINs, or account numbers.',
+                [
+                  { text: 'Not now', style: 'cancel' },
+                  {
+                    text: 'Turn on',
+                    onPress: () => {
+                      saveSetting('ai_on', '1');
+                      toast('Sinop AI is on ✨ Try “JM umutang 350”');
+                    },
+                  },
+                ]
+              );
+            }}
+          />
+        </Row>
+        <Divider />
+        <NavRow icon="chatbubbles-outline" label="Ask Sinop" onPress={() => router.push('/ask')} />
       </Group>
 
       <Group title="Vibe">

@@ -29,6 +29,8 @@ jobs:
         env:
           WEB_BASE: /${{ github.event.repository.name }}
           EXPO_NO_TELEMETRY: 1
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EXPO_PUBLIC_GEMINI_KEY: ${{ secrets.GEMINI_API_KEY }}
       - name: Add home-screen support
         run: node scripts/web-postbuild.js
         env:

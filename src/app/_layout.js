@@ -36,8 +36,8 @@ function AppShell() {
   const [settings, setSettings] = useState(null);
   const [locked, setLocked] = useState(null);
   const awayAt = useRef(0);
-  const [toastState, setToastState] = useState({ message: null, stamp: 0 });
-  const toast = useCallback((message) => setToastState({ message, stamp: Date.now() }), []);
+  const [toastState, setToastState] = useState({ message: null, stamp: 0, action: null });
+  const toast = useCallback((message, action = null) => setToastState({ message, action, stamp: Date.now() }), []);
   const refreshSettings = useCallback(async () => {
     setSettings(await getSettings(db));
   }, [db]);
@@ -308,8 +308,9 @@ function AppShell() {
           <Stack.Screen name="goal/[id]" />
           <Stack.Screen name="person/[id]" />
           <Stack.Screen name="settings" />
+          <Stack.Screen name="ask" />
         </Stack>
-        <Toast message={toastState.message} stamp={toastState.stamp} />
+        <Toast message={toastState.message} stamp={toastState.stamp} action={toastState.action} />
         {locked && settings.pin ? (
           <LockScreen pinHash={settings.pin} useBio={settings.lock_bio === '1'} onUnlock={() => setLocked(false)} onForgot={forgotPin} />
         ) : null}

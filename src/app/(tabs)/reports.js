@@ -1,8 +1,11 @@
-import { useState } from 'react';
-import { useWindowDimensions, View } from 'react-native';
-import { PAYMENT_METHODS, getBudgetStatus, getMonthReport, spendingByMethod } from '../../lib/db';
-import { daysInMonth, monthKey, monthName, peso, shiftMonth, today } from '../../lib/format';
-import { useQuery } from '../../lib/store';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, useWindowDimensions, View } from 'react-native';
+import { useSQLiteContext } from 'expo-sqlite';
+import { PAYMENT_METHODS, getBudgetStatus, getMonthReport, setSetting, spendingByMethod } from '../../lib/db';
+import { aiReady, aiTips, friendlyAiError } from '../../lib/ai';
+import { buildSnapshot } from '../../lib/snapshot';
+import { daysInMonth, monthKey, monthLabel, monthName, peso, shiftMonth, today } from '../../lib/format';
+import { useData, useQuery, useSettings } from '../../lib/store';
 import { swatch, useTheme } from '../../lib/theme';
 import { Card, EmptyState, ProgressBar, Row, Screen, SectionHeader, Title, Txt } from '../../components/ui';
 import { router } from 'expo-router';
@@ -64,6 +67,8 @@ export default function Reports() {
           <Txt w={700} size={14} color={theme[compare.ink]}>{compare.emoji}  {compare.text}</Txt>
         </Card>
       ) : null}
+
+      <AiTips month={month} hasData={r.spent > 0} />
 
       <SectionHeader title="Where it went" />
       <Card>
@@ -182,6 +187,78 @@ function Mini({ label, value, tint, ink }) {
     <Card tint={tint} style={{ flex: 1 }} padding={12}>
       <Txt w={700} size={12} color={theme[ink]}>{label}</Txt>
       <Txt w={800} size={15} color={theme[ink]} numberOfLines={1} adjustsFontSizeToFit style={{ marginTop: 2 }}>{value}</Txt>
+    </Card>
+  );
+}
+
+function readTips(settings, month) {
+  try {
+    const all = JSON.parse(settings.ai_tips || '{}');
+    return Array.isArray(all[month]) ? all[month] : null;
+  } catch {
+    return null;
+  }
+}
+
+function AiTips({ month, hasData }) {
+  const theme = useTheme();
+  const db = useSQLiteContext();
+  const settings = useSettings();
+  const { refreshSettings, toast } = useData();
+  const [loading, setLoading] = useState(false);
+  const [tips, setTips] = useState(() => readTips(settings, month));
+
+  useEffect(() => {
+    setTips(readTips(settings, month));
+  }, [month, settings.ai_tips]);
+
+  if (!aiReady(settings) || !hasData) return null;
+
+  const run = async () => {
+    setLoading(true);
+    try {
+      const snap = await buildSnapshot(db, settings, month);
+      const list = await aiTips(snap, monthLabel(month));
+      if (!list.length) throw new Error('empty');
+      let all = {};
+      try {
+        all = JSON.parse(settings.ai_tips || '{}');
+      } catch {
+      }
+      const keep = Object.keys(all).sort().slice(-5);
+      const next = Object.fromEntries(keep.map((k) => [k, all[k]]));
+      next[month] = list;
+      await setSetting(db, 'ai_tips', JSON.stringify(next));
+      setTips(list);
+      refreshSettings();
+    } catch (e) {
+      toast(friendlyAiError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card tint="lilac" style={{ marginTop: 12 }} padding={16}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Txt w={800} size={15} color={theme.lilacInk}>💡 Sinop tips</Txt>
+        {loading ? (
+          <ActivityIndicator color={theme.lilacInk} />
+        ) : (
+          <Pressable onPress={run} hitSlop={10}>
+            <Txt w={800} size={13.5} color={theme.lilacInk}>{tips ? 'Refresh ✨' : 'Get tips ✨'}</Txt>
+          </Pressable>
+        )}
+      </Row>
+      {tips ? (
+        tips.map((t, i) => (
+          <Txt key={i} w={600} size={13.5} color={theme.lilacInk} style={{ marginTop: 8, lineHeight: 19 }}>{t}</Txt>
+        ))
+      ) : (
+        <Txt size={13} color={theme.lilacInk} style={{ marginTop: 6 }}>
+          Let Sinop AI look at your {monthName(month)} and give you 3 real tips. No judgment, promise 🤞
+        </Txt>
+      )}
     </Card>
   );
 }

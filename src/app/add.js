@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { choosePhoto, deletePhotoFile } from '../lib/photos';
+import { useUndoDelete } from '../lib/undo';
 import { parseQuickLog } from '../lib/quicklog';
 import { Alert } from '../lib/alert';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -35,6 +36,7 @@ export default function Add() {
   const insets = useSafeAreaInsets();
   const { bump, toast } = useData();
   const params = useLocalSearchParams();
+  const undoDelete = useUndoDelete();
   const editTxId = params.id ? Number(params.id) : null;
   const editDebtId = params.debtId ? Number(params.debtId) : null;
   const editing = !!(editTxId || editDebtId);
@@ -196,26 +198,15 @@ export default function Add() {
     }
   };
 
-  const remove = () => {
-    Alert.alert('Delete this?', 'This can’t be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          if (editTxId) {
-            deletePhotoFile(origPhoto);
-            await deleteTransaction(db, editTxId);
-          }
-          if (editDebtId) {
-            if (oldReminder) await cancelReminder(oldReminder);
-            await deleteDebt(db, editDebtId);
-          }
-          bump();
-          router.back();
-        },
-      },
-    ]);
+  const remove = async () => {
+    if (editTxId) {
+      await undoDelete('tx', editTxId, 'Deleted 🗑️', () => deleteTransaction(db, editTxId));
+    }
+    if (editDebtId) {
+      if (oldReminder) await cancelReminder(oldReminder);
+      await undoDelete('debt', editDebtId, 'Utang deleted 🗑️', () => deleteDebt(db, editDebtId));
+    }
+    router.back();
   };
 
   const typeOptions = editDebtId

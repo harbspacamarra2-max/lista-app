@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Linking, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Redirect, router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,12 +13,11 @@ import {
   listGoals,
   listTransactions,
   payBill,
-  saveTransaction,
   setBillReminder,
 } from '../../lib/db';
 import { addDays, daysBetween, dueLabel, greeting, monthKey, monthName, peso, prettyDate, today } from '../../lib/format';
 import { cancelReminder, scheduleBillReminder } from '../../lib/notify';
-import { parseQuickLog } from '../../lib/quicklog';
+import { aiReady } from '../../lib/ai';
 import { pick } from '../../lib/quips';
 import { useData, useQuery, useSettings } from '../../lib/store';
 import { fonts, radius, useTheme } from '../../lib/theme';
@@ -26,6 +25,7 @@ import { checkForUpdate } from '../../lib/updates';
 import { Avatar, Badge, Card, EmptyState, GradientCard, IconButton, ProgressBar, Row, Screen, SectionHeader, Txt, tap } from '../../components/ui';
 import { StatPill, TransactionRow } from '../../components/bits';
 import { GoalMini } from '../../components/goals';
+import { useSmartLog } from '../../components/smart';
 
 const addDaysIso = (n) => addDays(today(), n);
 
@@ -37,27 +37,14 @@ export default function Home() {
   const sqlite = useSQLiteContext();
   const { bump, toast } = useData();
   const [quick, setQuick] = useState('');
+  const smart = useSmartLog();
+  const aiOn = aiReady(settings);
   const quickLog = async () => {
     const text = quick.trim();
-    if (!text) return;
-    const p = parseQuickLog(text, data?.categories || []);
-    if (!p || !p.amount) {
-      setQuick('');
-      router.push(`/add?prefill=${encodeURIComponent(text)}`);
-      return;
-    }
-    await saveTransaction(sqlite, {
-      kind: p.kind,
-      amount: p.amount,
-      category_id: p.category?.id,
-      method: p.method,
-      date: p.date,
-      note: p.note,
-    });
-    tap('success');
+    if (!text || smart.busy) return;
+    const handled = await smart.understand(text);
     setQuick('');
-    bump();
-    toast(`${p.kind === 'income' ? '💰' : p.category?.emoji || '✅'} ${p.note} · ${peso(p.amount)} → ${p.category?.name || 'Others'}`);
+    if (!handled) router.push(`/add?prefill=${encodeURIComponent(text)}`);
   };
   const markBillPaid = async (b) => {
     await cancelReminder(b.reminder_id);
@@ -133,25 +120,58 @@ export default function Home() {
           height: 52,
         }}
       >
-        <Txt size={18}>✍️</Txt>
+        <Txt size={18}>{aiOn ? '✨' : '✍️'}</Txt>
         <TextInput
           value={quick}
           onChangeText={setQuick}
           onSubmitEditing={quickLog}
           returnKeyType="done"
-          placeholder="Type it: jeep 13, milk tea 120 gcash"
+          editable={!smart.busy}
+          placeholder={aiOn ? 'Say it: JM umutang 350 sa Friday' : 'Type it: jeep 13, JM umutang 350'}
           placeholderTextColor={theme.faint}
           style={{ flex: 1, marginLeft: 10, fontFamily: fonts[600], fontSize: 15, color: theme.text, paddingVertical: 10 }}
         />
-        {quick.trim() ? (
+        {smart.busy ? (
+          <View style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={theme.brand} />
+          </View>
+        ) : quick.trim() ? (
           <Pressable
             onPress={quickLog}
             style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: theme.brand, alignItems: 'center', justifyContent: 'center' }}
           >
             <Ionicons name="arrow-up" size={20} color={theme.onBrand} />
           </Pressable>
-        ) : null}
+        ) : (
+          <Pressable
+            onPress={smart.scan}
+            accessibilityLabel="Scan a receipt"
+            style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: theme.cardAlt, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name="scan-outline" size={20} color={theme.text} />
+          </Pressable>
+        )}
       </View>
+
+      <Pressable
+        onPress={() => router.push('/ask')}
+        style={({ pressed }) => ({
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+          backgroundColor: theme.lilac,
+          borderRadius: 18,
+          paddingHorizontal: 14,
+          height: 46,
+          marginBottom: 14,
+          marginTop: -4,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
+        })}
+      >
+        <Txt size={17}>💬</Txt>
+        <Txt w={700} size={14} color={theme.lilacInk} style={{ flex: 1 }} numberOfLines={1}>Ask Sinop: “Saan napunta pera ko?”</Txt>
+        <Ionicons name="chevron-forward" size={18} color={theme.lilacInk} />
+      </Pressable>
 
       {update ? (
         <Card tint="lilac" style={{ marginBottom: 12 }} padding={14} onPress={() => Linking.openURL(update.url)}>
@@ -363,6 +383,7 @@ export default function Home() {
           ))
         )}
       </Card>
+      {smart.sheet}
     </Screen>
   );
 }

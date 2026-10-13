@@ -17,6 +17,7 @@ import {
 } from '../../lib/db';
 import { centavosToInput, cleanAmountInput, dueLabel, peso, prettyDate, shortDate, toCentavos, today } from '../../lib/format';
 import { cancelReminder } from '../../lib/notify';
+import { useUndoDelete } from '../../lib/undo';
 import { useData, useQuery } from '../../lib/store';
 import { fill, pick } from '../../lib/quips';
 import { radius, useTheme } from '../../lib/theme';
@@ -28,6 +29,7 @@ export default function PersonScreen() {
   const theme = useTheme();
   const db = useSQLiteContext();
   const { bump } = useData();
+  const undoDelete = useUndoDelete();
   const { id } = useLocalSearchParams();
   const personId = Number(id);
   const [payFor, setPayFor] = useState(null);
@@ -117,8 +119,7 @@ export default function PersonScreen() {
         style: 'destructive',
         onPress: async () => {
           for (const d of debts) if (d.reminder_id) await cancelReminder(d.reminder_id);
-          await deletePerson(db, personId);
-          bump();
+          await undoDelete('person', personId, `${person.name} deleted 🗑️`, () => deletePerson(db, personId));
           router.back();
         },
       },
@@ -126,15 +127,12 @@ export default function PersonScreen() {
   };
 
   const removePayment = (p) => {
-    Alert.alert('Undo this payment?', `${peso(p.amount)} on ${prettyDate(p.date)}`, [
+    Alert.alert('Remove this payment?', `${peso(p.amount)} on ${prettyDate(p.date)}`, [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Undo',
+        text: 'Remove',
         style: 'destructive',
-        onPress: async () => {
-          await deletePayment(db, p.id);
-          bump();
-        },
+        onPress: () => undoDelete('payment', p.id, `Payment removed · ${peso(p.amount)}`, () => deletePayment(db, p.id)),
       },
     ]);
   };
