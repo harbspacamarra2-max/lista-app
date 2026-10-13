@@ -12,6 +12,9 @@ import { Avatar, Button, Card, Chip, Divider, Field, IconButton, Row, Screen, Se
 import { NavRow } from '../components/bits';
 import { LoveNote } from '../components/lovenote';
 import { PinPad, biometricsAvailable, hashPin } from '../components/lock';
+import { backupSummary, exportBackup, pickBackup, restoreBackup } from '../lib/backup';
+import { prettyDate, today } from '../lib/format';
+import { currentVersion } from '../lib/updates';
 
 const EMOJI_CHOICES = ['☕', '🍔', '🧋', '🍕', '🚗', '⛽', '🏠', '👕', '💄', '🐶', '🎬', '🎵', '🎓', '✈️', '🏋️', '🎁', '🧾', '💻', '📦', '🙏'];
 
@@ -20,7 +23,7 @@ export default function Settings() {
   const db = useSQLiteContext();
   const { pref, setPref, accent, setAccent } = useThemePref();
   const settings = useSettings();
-  const { bump, refreshSettings } = useData();
+  const { bump, refreshSettings, toast } = useData();
   const params = useLocalSearchParams();
 
   const [editing, setEditing] = useState(null);
@@ -68,9 +71,53 @@ export default function Settings() {
   const doExport = async () => {
     const csv = await exportCSV(db);
     try {
-      await Share.share({ message: csv, title: 'Lista export' });
+      await Share.share({ message: csv, title: 'Sinop export' });
     } catch {
     }
+  };
+
+  const doBackup = async () => {
+    try {
+      await exportBackup(db);
+      await saveSetting('last_backup', today());
+      toast('Backup saved! 💾 Keep the file somewhere safe (Drive, Messenger to self)');
+    } catch (e) {
+      Alert.alert('Backup failed', 'Please try again.');
+    }
+  };
+
+  const doRestore = async () => {
+    let backup;
+    try {
+      backup = await pickBackup();
+    } catch (e) {
+      Alert.alert('Can’t use that file', e.message || 'That file isn’t a Sinop backup.');
+      return;
+    }
+    if (!backup) return;
+    const s = backupSummary(backup);
+    Alert.alert(
+      'Restore this backup?',
+      `From ${s.date || 'unknown date'}: ${s.transactions} entries, ${s.debts} utang, ${s.goals} goals.\n\nThis REPLACES everything currently in the app.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Restore',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await restoreBackup(db, backup);
+              await refreshSettings();
+              bump();
+              reload();
+              toast('Restored! Welcome back 🫶');
+            } catch (e) {
+              Alert.alert('Restore failed', 'Nothing was changed. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const doReset = () => {
@@ -188,6 +235,15 @@ export default function Settings() {
         />
       </Group>
 
+      <Group title="Backup">
+        <Txt size={12.5} color="sub" style={{ marginTop: 10, marginBottom: 2 }}>
+          {settings.last_backup ? `Last backup: ${prettyDate(settings.last_backup)}` : 'No backup yet. Your data only lives on this phone 😬'}
+        </Txt>
+        <NavRow icon="cloud-download-outline" label="Save backup file" onPress={doBackup} />
+        <Divider />
+        <NavRow icon="cloud-upload-outline" label="Restore from backup" onPress={doRestore} />
+      </Group>
+
       <Group title="Stuff">
         <NavRow icon="pricetags-outline" label="Categories & budgets" value={`${(cats || []).length}`} onPress={() => setCatSheet(true)} />
         <Divider />
@@ -215,7 +271,7 @@ export default function Settings() {
             onValueChange={async (v) => {
               const ok = await setDailyNudge(v);
               if (v && !ok) {
-                Alert.alert('Notifications are off', 'Please allow notifications for Lista in your phone’s settings first.');
+                Alert.alert('Notifications are off', 'Please allow notifications for Sinop in your phone’s settings first.');
                 return;
               }
               saveSetting('daily_nudge', v ? '1' : '0');
@@ -229,14 +285,14 @@ export default function Settings() {
       </Group>
 
       <Pressable onPress={secretTap} hitSlop={12} style={{ marginTop: 24, paddingVertical: 6 }}>
-        <Txt size={12} color="faint" center>Lista v1.1 · Ilista mo na. 💚</Txt>
+        <Txt size={12} color="faint" center>{`Sinop v${currentVersion} · Ilista mo na. 💚`}</Txt>
       </Pressable>
       <LoveNote visible={love} onClose={() => setLove(false)} />
 
       <Sheet visible={lockSheet} onClose={() => setLockSheet(false)} title="App lock 🔒">
         {settings.pin && !pinStep.changing ? (
           <View>
-            <Txt size={14} color="sub">Lista asks for your PIN when you open it. Walang makakasilip sa utang list mo 👀</Txt>
+            <Txt size={14} color="sub">Sinop asks for your PIN when you open it. Walang makakasilip sa utang list mo 👀</Txt>
             {bioAvail ? (
               <Row style={{ marginTop: 14, backgroundColor: theme.card, borderRadius: 18, padding: 14, justifyContent: 'space-between', borderWidth: 1, borderColor: theme.border }}>
                 <View style={{ flex: 1 }}>
@@ -282,7 +338,7 @@ export default function Settings() {
                 await saveSetting('pin', hashPin(pin));
                 tap('success');
                 setLockSheet(false);
-                Alert.alert('App lock is on 🔒', 'Don’t forget your PIN! If you do, the only way in is to reset Lista.');
+                Alert.alert('App lock is on 🔒', 'Don’t forget your PIN! If you do, the only way in is to reset Sinop.');
               }}
             />
           </View>

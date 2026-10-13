@@ -31,7 +31,7 @@ export async function biometricsAvailable() {
 export async function askBiometrics() {
   if (!LocalAuth) return false;
   try {
-    const r = await LocalAuth.authenticateAsync({ promptMessage: 'Unlock Lista', cancelLabel: 'Use PIN', disableDeviceFallback: true });
+    const r = await LocalAuth.authenticateAsync({ promptMessage: 'Unlock Sinop', cancelLabel: 'Use PIN', disableDeviceFallback: true });
     return !!r.success;
   } catch {
     return false;
@@ -150,7 +150,7 @@ export function LockScreen({ pinHash, useBio, onUnlock, onForgot }) {
           <Txt serif="italic" size={38} color="brand">back</Txt>
         </Txt>
         <Txt w={600} size={14} color={error ? 'red' : 'sub'} style={{ marginTop: 4, marginBottom: 28 }}>
-          {error ? 'Wrong PIN, try again 🙈' : 'Enter your PIN to open Lista'}
+          {error ? 'Wrong PIN, try again 🙈' : 'Enter your PIN to open Sinop'}
         </Txt>
         <PinPad
           error={error}

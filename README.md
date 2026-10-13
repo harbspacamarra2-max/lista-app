@@ -1,4 +1,4 @@
-# Lista 💚
+# Sinop 💚
 
 **Ilista mo na.** A simple, friendly expense + utang tracker for Android and iPhone.
 
@@ -15,7 +15,7 @@ Open **https://harbspacamarra2-max.github.io/lista-app/** in Safari, tap **Share
 ## Get the APK
 
 Every push to `main` builds a new APK automatically.
-Open the **Releases** section of this repo (or `/releases/latest`) and download **Lista.apk**.
+Open the **Releases** section of this repo (or `/releases/latest`) and download **Sinop.apk**.
 
 ## Run it yourself (on a computer)
 

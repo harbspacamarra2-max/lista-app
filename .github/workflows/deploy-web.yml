@@ -1,4 +1,4 @@
-name: Deploy Lista web app (for iPhone)
+name: Deploy Sinop web app (for iPhone)
 
 on:
   push:

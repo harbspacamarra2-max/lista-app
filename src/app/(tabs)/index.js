@@ -1,12 +1,13 @@
-import { Pressable, ScrollView, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
+import { checkForUpdate } from '../../lib/updates';
 import { Redirect, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { getBudgetStatus, getOverview, getStreak, getUtangSummary, listGoals, listTransactions } from '../../lib/db';
 import { GoalMini } from '../../components/goals';
-import { dueLabel, greeting, monthName, monthKey, peso, prettyDate } from '../../lib/format';
+import { daysBetween, today, dueLabel, greeting, monthName, monthKey, peso, prettyDate } from '../../lib/format';
 import { useQuery, useSettings } from '../../lib/store';
 import { pick } from '../../lib/quips';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { radius, useTheme } from '../../lib/theme';
 import { Avatar, Badge, Card, EmptyState, GradientCard, IconButton, ProgressBar, Row, Screen, SectionHeader, Txt, tap } from '../../components/ui';
@@ -17,6 +18,10 @@ export default function Home() {
   const settings = useSettings();
   const [tip, setTip] = useState(() => pick('homeTip'));
   useFocusEffect(useCallback(() => setTip(pick('homeTip')), []));
+  const [update, setUpdate] = useState(null);
+  useEffect(() => {
+    checkForUpdate().then(setUpdate);
+  }, []);
   const { data } = useQuery(async (db) => {
     const [overview, utang, recent, streak, goals, budgets] = await Promise.all([
       getOverview(db),
@@ -59,6 +64,30 @@ export default function Home() {
           <IconButton icon="settings-outline" onPress={() => router.push('/settings')} label="Settings" />
         </Row>
       </Row>
+
+      {update ? (
+        <Card tint="lilac" style={{ marginBottom: 12 }} padding={14} onPress={() => Linking.openURL(update.url)}>
+          <Row gap={12}>
+            <Txt size={26}>✨</Txt>
+            <View style={{ flex: 1 }}>
+              <Txt w={800} size={15} color={theme.lilacInk}>New version available (v{update.version})</Txt>
+              <Txt size={12.5} color={theme.lilacInk}>Tap to download, then open it to update. Your data stays.</Txt>
+            </View>
+          </Row>
+        </Card>
+      ) : null}
+
+      {Platform.OS === 'web' && (data?.recent?.length || 0) > 0 && (!settings.last_backup || daysBetween(settings.last_backup, today()) > 14) ? (
+        <Card tint="butter" style={{ marginBottom: 12 }} padding={14} onPress={() => router.push('/settings')}>
+          <Row gap={12}>
+            <Txt size={26}>💾</Txt>
+            <View style={{ flex: 1 }}>
+              <Txt w={800} size={15} color={theme.butterInk}>Back up your data</Txt>
+              <Txt size={12.5} color={theme.butterInk}>Browsers can clear saved data. Save a backup file in Settings, just in case.</Txt>
+            </View>
+          </Row>
+        </Card>
+      ) : null}
 
       <GradientCard>
         <Txt w={600} size={14} color={theme.onBrand} style={{ opacity: 0.85 }}>

@@ -44,10 +44,10 @@ export default function Onboarding() {
         <Image source={require('../../assets/icon.png')} style={{ width: 88, height: 88, borderRadius: 26 }} />
         <Txt style={{ marginTop: 22 }}>
           <Txt serif size={52}>hi, i’m </Txt>
-          <Txt serif="italic" size={52} color="brand">lista</Txt>
+          <Txt serif="italic" size={52} color="brand">sinop</Txt>
         </Txt>
         <Txt size={16} color="sub" style={{ marginTop: 6, lineHeight: 23 }}>
-          Your pocket notebook for gastos and utang. No more “saan napunta pera ko?” 😭
+          Your masinop pocket notebook for gastos and utang. No more “saan napunta pera ko?” 😭
         </Txt>
 
         <View style={{ marginTop: 22, gap: 10 }}>

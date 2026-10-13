@@ -62,11 +62,11 @@ function AppShell() {
   const forgotPin = () => {
     Alert.alert(
       'Forgot your PIN?',
-      'For your privacy, the only way in is to reset Lista. This deletes ALL your data and can’t be undone.',
+      'For your privacy, the only way in is to reset Sinop. This deletes ALL your data and can’t be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reset Lista',
+          text: 'Reset Sinop',
           style: 'destructive',
           onPress: async () => {
             await resetAll(db);

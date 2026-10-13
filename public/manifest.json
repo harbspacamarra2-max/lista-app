@@ -1,7 +1,7 @@
 {
-  "name": "Lista",
-  "short_name": "Lista",
-  "description": "Ilista mo na. A simple, friendly expense and utang tracker.",
+  "name": "Sinop",
+  "short_name": "Sinop",
+  "description": "Ilista mo na. Masinop na expense at utang tracker.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -9,8 +9,21 @@
   "background_color": "#FAF7F2",
   "theme_color": "#3E9B6B",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

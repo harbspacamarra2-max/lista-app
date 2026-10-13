@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "Lista",
-    "slug": "lista",
-    "version": "1.1.0",
-    "scheme": "lista",
+    "name": "Sinop",
+    "slug": "sinop",
+    "version": "1.2.0",
+    "scheme": "sinop",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.lista.app"
+      "bundleIdentifier": "io.github.harbspacamarra2max.sinop"
     },
     "android": {
-      "package": "com.lista.app",
-      "versionCode": 3,
+      "package": "io.github.harbspacamarra2max.sinop",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#16A06A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -54,7 +54,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow Lista to use Face ID to unlock the app."
+          "faceIDPermission": "Allow Sinop to use Face ID to unlock the app."
         }
       ]
     ],
