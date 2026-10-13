@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sinop",
     "slug": "sinop",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "scheme": "sinop",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "io.github.harbspacamarra2max.sinop",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#16A06A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -55,6 +55,32 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow Sinop to use Face ID to unlock the app."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Sinop needs your photos to attach receipts and proof of payment.",
+          "cameraPermission": "Sinop uses the camera to snap receipts and proof of payment."
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "Sinop",
+              "label": "Sinop · Today",
+              "description": "Today’s spending and a quick + Add button",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "previewImage": "./assets/widget-preview.png",
+              "updatePeriodMillis": 1800000,
+              "resizeMode": "horizontal|vertical"
+            }
+          ]
         }
       ]
     ],

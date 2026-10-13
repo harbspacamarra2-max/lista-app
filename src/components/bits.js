@@ -35,7 +35,7 @@ export function TransactionRow({ tx, onPress, onLongPress, showDate }) {
         <View style={{ flex: 1 }}>
           <Txt w={700} size={15} numberOfLines={1}>{tx.note || tx.category_name || 'Uncategorized'}</Txt>
           <Txt size={12.5} color="sub" numberOfLines={1} style={{ marginTop: 2 }}>
-            {[tx.note ? tx.category_name : null, methodLabel(tx.method), showDate ? prettyDate(tx.date) : null]
+            {[tx.note ? tx.category_name : null, methodLabel(tx.method), showDate ? prettyDate(tx.date) : null, tx.photo ? '📎' : null]
               .filter(Boolean)
               .join(' · ')}
           </Txt>

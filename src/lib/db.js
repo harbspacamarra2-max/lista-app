@@ -102,6 +102,30 @@ export async function migrate(db) {
       note TEXT
     );
   `);
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS bills (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      emoji TEXT NOT NULL DEFAULT '🧾',
+      amount INTEGER NOT NULL,
+      category_id INTEGER,
+      method TEXT NOT NULL DEFAULT 'cash',
+      freq TEXT NOT NULL DEFAULT 'monthly',
+      next_due TEXT NOT NULL,
+      remind INTEGER NOT NULL DEFAULT 1,
+      reminder_id TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS no_spend_days (date TEXT PRIMARY KEY NOT NULL);
+  `);
+  const addCol = async (table, col, ddl) => {
+    const info = await db.getAllAsync(`PRAGMA table_info(${table})`);
+    if (!info.some((c) => c.name === col)) await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  };
+  await addCol('transactions', 'photo', 'photo TEXT');
+  await addCol('transactions', 'bill_id', 'bill_id INTEGER');
+  await addCol('debt_payments', 'photo', 'photo TEXT');
   const cols = await db.getAllAsync('PRAGMA table_info(categories)');
   if (!cols.some((c) => c.name === 'budget')) {
     await db.execAsync('ALTER TABLE categories ADD COLUMN budget INTEGER NOT NULL DEFAULT 0');
@@ -181,17 +205,17 @@ export function getTransaction(db, id) {
 }
 
 export async function saveTransaction(db, tx) {
-  const { id, kind, amount, category_id, method, date, note } = tx;
+  const { id, kind, amount, category_id, method, date, note, photo, bill_id } = tx;
   if (id) {
     await db.runAsync(
-      'UPDATE transactions SET kind=?, amount=?, category_id=?, method=?, date=?, note=? WHERE id=?',
-      kind, amount, category_id ?? null, method || 'cash', date, note || null, id
+      'UPDATE transactions SET kind=?, amount=?, category_id=?, method=?, date=?, note=?, photo=? WHERE id=?',
+      kind, amount, category_id ?? null, method || 'cash', date, note || null, photo || null, id
     );
     return id;
   }
   const r = await db.runAsync(
-    'INSERT INTO transactions (kind, amount, category_id, method, date, note) VALUES (?, ?, ?, ?, ?, ?)',
-    kind, amount, category_id ?? null, method || 'cash', date, note || null
+    'INSERT INTO transactions (kind, amount, category_id, method, date, note, photo, bill_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    kind, amount, category_id ?? null, method || 'cash', date, note || null, photo || null, bill_id ?? null
   );
   return r.lastInsertRowId;
 }
@@ -363,10 +387,10 @@ export async function deleteDebt(db, id) {
   await db.runAsync('DELETE FROM debts WHERE id = ?', id);
 }
 
-export async function addPayment(db, { debtId, amount, date, note }) {
+export async function addPayment(db, { debtId, amount, date, note, photo }) {
   await db.runAsync(
-    'INSERT INTO debt_payments (debt_id, amount, date, note) VALUES (?, ?, ?, ?)',
-    debtId, amount, date || today(), note || null
+    'INSERT INTO debt_payments (debt_id, amount, date, note, photo) VALUES (?, ?, ?, ?, ?)',
+    debtId, amount, date || today(), note || null, photo || null
   );
 }
 
@@ -399,6 +423,7 @@ export async function exportCSV(db) {
 
 export async function resetAll(db) {
   await db.execAsync(`
+    DELETE FROM bills; DELETE FROM no_spend_days;
     DELETE FROM goal_entries; DELETE FROM goals;
     UPDATE categories SET budget = 0;
     DELETE FROM debt_payments; DELETE FROM debts; DELETE FROM people;
@@ -410,7 +435,7 @@ export async function resetAll(db) {
 export async function getStreak(db) {
   const rows = await db.getAllAsync(
     `SELECT DISTINCT date FROM (
-       SELECT date FROM transactions UNION SELECT date FROM debts
+       SELECT date FROM transactions UNION SELECT date FROM debts UNION SELECT date FROM no_spend_days
      ) ORDER BY date DESC LIMIT 400`
   );
   const dates = new Set(rows.map((r) => r.date));
@@ -535,4 +560,91 @@ export async function saveSplit(db, { reason, date, dueDate, shares, myShare }) 
     }
   });
   return created;
+}
+
+export async function markNoSpend(db, date = today()) {
+  await db.runAsync('INSERT OR IGNORE INTO no_spend_days (date) VALUES (?)', date);
+}
+
+export async function todaySummary(db) {
+  const t = today();
+  const m = monthKey(t);
+  const [spentToday, spentMonth, settings] = await Promise.all([
+    sumBetween(db, 'expense', t, t),
+    sumBetween(db, 'expense', `${m}-01`, `${m}-31`),
+    getSettings(db),
+  ]);
+  const budget = Number(settings.budget || 0);
+  return { date: t, month: m, spentToday, spentMonth, budget, name: settings.name || '' };
+}
+
+function addMonths(iso, n, anchorDay) {
+  const [y, mo] = iso.split('-').map(Number);
+  const target = new Date(y, mo - 1 + n, 1);
+  const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  const day = Math.min(anchorDay, last);
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+export function nextDueAfter(bill) {
+  const anchor = Number((bill.anchor_day || bill.next_due.slice(8)) || 1);
+  if (bill.freq === 'weekly') return addDays(bill.next_due, 7);
+  if (bill.freq === 'yearly') return addMonths(bill.next_due, 12, anchor);
+  return addMonths(bill.next_due, 1, anchor);
+}
+
+const BILL_SELECT = `
+  SELECT b.*, c.name AS category_name, c.emoji AS category_emoji, c.color AS category_color
+  FROM bills b LEFT JOIN categories c ON c.id = b.category_id`;
+
+export function listBills(db) {
+  return db.getAllAsync(`${BILL_SELECT} WHERE b.active = 1 ORDER BY b.next_due, b.id`);
+}
+
+export function getBill(db, id) {
+  return db.getFirstAsync(`${BILL_SELECT} WHERE b.id = ?`, id);
+}
+
+export async function saveBill(db, b) {
+  if (b.id) {
+    await db.runAsync(
+      'UPDATE bills SET name=?, emoji=?, amount=?, category_id=?, method=?, freq=?, next_due=?, remind=? WHERE id=?',
+      b.name.trim(), b.emoji, b.amount, b.category_id ?? null, b.method || 'cash', b.freq, b.next_due, b.remind ? 1 : 0, b.id
+    );
+    return b.id;
+  }
+  const r = await db.runAsync(
+    'INSERT INTO bills (name, emoji, amount, category_id, method, freq, next_due, remind) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    b.name.trim(), b.emoji, b.amount, b.category_id ?? null, b.method || 'cash', b.freq, b.next_due, b.remind ? 1 : 0
+  );
+  return r.lastInsertRowId;
+}
+
+export async function setBillReminder(db, id, reminderId) {
+  await db.runAsync('UPDATE bills SET reminder_id = ? WHERE id = ?', reminderId || null, id);
+}
+
+export async function deleteBill(db, id) {
+  await db.runAsync('UPDATE bills SET active = 0, reminder_id = NULL WHERE id = ?', id);
+}
+
+export async function payBill(db, bill, { date = today(), amount } = {}) {
+  await saveTransaction(db, {
+    kind: 'expense',
+    amount: amount ?? bill.amount,
+    category_id: bill.category_id,
+    method: bill.method,
+    date,
+    note: bill.name,
+    bill_id: bill.id,
+  });
+  const next = nextDueAfter(bill);
+  await db.runAsync('UPDATE bills SET next_due = ? WHERE id = ?', next, bill.id);
+  return next;
+}
+
+export async function skipBill(db, bill) {
+  const next = nextDueAfter(bill);
+  await db.runAsync('UPDATE bills SET next_due = ? WHERE id = ?', next, bill.id);
+  return next;
 }

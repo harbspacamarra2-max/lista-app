@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Pressable, Share, View } from 'react-native';
+import { Image, Pressable, Share, View } from 'react-native';
+import { choosePhoto } from '../../lib/photos';
 import { Alert } from '../../lib/alert';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -31,6 +32,8 @@ export default function PersonScreen() {
   const personId = Number(id);
   const [payFor, setPayFor] = useState(null);
   const [payAmount, setPayAmount] = useState('');
+  const [payPhoto, setPayPhoto] = useState(null);
+  const [viewPhoto, setViewPhoto] = useState(null);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState('');
   const [showPaid, setShowPaid] = useState(false);
@@ -72,13 +75,14 @@ export default function PersonScreen() {
 
   const openPay = (debt) => {
     setPayFor(debt);
+    setPayPhoto(null);
     setPayAmount(centavosToInput(debt.remaining));
   };
 
   const savePayment = async () => {
     const cents = Math.min(toCentavos(payAmount), payFor.remaining);
     if (cents <= 0) return;
-    await addPayment(db, { debtId: payFor.id, amount: cents, date: today() });
+    await addPayment(db, { debtId: payFor.id, amount: cents, date: today(), photo: payPhoto });
     if (cents >= payFor.remaining && payFor.reminder_id) {
       await cancelReminder(payFor.reminder_id);
       await setDebtReminder(db, payFor.id, null);
@@ -188,7 +192,7 @@ export default function PersonScreen() {
       <SectionHeader title={open.length ? 'Open' : 'Nothing open'} />
       <View style={{ gap: 10 }}>
         {open.map((d) => (
-          <DebtCard key={d.id} d={d} payments={payments.filter((p) => p.debt_id === d.id)} onPay={() => openPay(d)} onUndo={removePayment} />
+          <DebtCard key={d.id} d={d} payments={payments.filter((p) => p.debt_id === d.id)} onPay={() => openPay(d)} onUndo={removePayment} onPhoto={setViewPhoto} />
         ))}
       </View>
 
@@ -201,7 +205,7 @@ export default function PersonScreen() {
           {showPaid ? (
             <View style={{ gap: 10 }}>
               {paid.map((d) => (
-                <DebtCard key={d.id} d={d} payments={payments.filter((p) => p.debt_id === d.id)} onUndo={removePayment} />
+                <DebtCard key={d.id} d={d} payments={payments.filter((p) => p.debt_id === d.id)} onUndo={removePayment} onPhoto={setViewPhoto} />
               ))}
             </View>
           ) : null}
@@ -239,12 +243,39 @@ export default function PersonScreen() {
                 </Pressable>
               ))}
             </Row>
+            {payPhoto ? (
+              <View style={{ marginTop: 14 }}>
+                <Image source={{ uri: payPhoto }} style={{ width: '100%', height: 180, borderRadius: radius.lg, backgroundColor: theme.cardAlt }} resizeMode="cover" />
+                <Pressable
+                  onPress={() => setPayPhoto(null)}
+                  style={{ position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 16, paddingHorizontal: 12, height: 30, justifyContent: 'center' }}
+                >
+                  <Txt w={700} size={12.5} color="#FFFFFF">Remove ✕</Txt>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                onPress={async () => {
+                  const uri = await choosePhoto();
+                  if (uri) setPayPhoto(uri);
+                }}
+                style={{ marginTop: 14, borderRadius: radius.md, borderWidth: 1.5, borderStyle: 'dashed', borderColor: theme.border, paddingVertical: 14, alignItems: 'center' }}
+              >
+                <Txt w={700} size={13.5} color="sub">📸 Add proof (GCash screenshot, resibo)</Txt>
+              </Pressable>
+            )}
             <Button title="Save payment" icon="checkmark-circle" onPress={savePayment} style={{ marginTop: 20 }} disabled={toCentavos(payAmount) <= 0} />
           </View>
         ) : null}
       </Sheet>
 
       <Celebrate visible={!!party} title={party?.title} subtitle={party?.subtitle} onDone={() => setParty(null)} />
+
+      <Sheet visible={!!viewPhoto} onClose={() => setViewPhoto(null)} title="Proof of payment 📎">
+        {viewPhoto ? (
+          <Image source={{ uri: viewPhoto }} style={{ width: '100%', height: 460, borderRadius: radius.lg, backgroundColor: theme.cardAlt }} resizeMode="contain" />
+        ) : null}
+      </Sheet>
 
       <Sheet visible={renaming} onClose={() => setRenaming(false)} title="Rename">
         <Field value={newName} onChangeText={setNewName} autoFocus autoCapitalize="words" />
@@ -263,7 +294,7 @@ export default function PersonScreen() {
   );
 }
 
-function DebtCard({ d, payments, onPay, onUndo }) {
+function DebtCard({ d, payments, onPay, onUndo, onPhoto }) {
   const theme = useTheme();
   const due = d.remaining > 0 ? dueLabel(d.due_date) : null;
   const pct = d.amount ? (d.amount - d.remaining) / d.amount : 0;
@@ -311,9 +342,9 @@ function DebtCard({ d, payments, onPay, onUndo }) {
       {payments.length ? (
         <View style={{ marginTop: 10, backgroundColor: theme.cardAlt, borderRadius: radius.sm, padding: 10, gap: 6 }}>
           {payments.map((p) => (
-            <Pressable key={p.id} onLongPress={() => onUndo(p)}>
+            <Pressable key={p.id} onLongPress={() => onUndo(p)} onPress={() => (p.photo ? onPhoto(p.photo) : null)}>
               <Row style={{ justifyContent: 'space-between' }}>
-                <Txt size={12.5} color="sub">✓ Paid {prettyDate(p.date)}</Txt>
+                <Txt size={12.5} color="sub">✓ Paid {prettyDate(p.date)}{p.photo ? '  📎 view proof' : ''}</Txt>
                 <Txt w={700} size={12.5} color="sub">{peso(p.amount)}</Txt>
               </Row>
             </Pressable>

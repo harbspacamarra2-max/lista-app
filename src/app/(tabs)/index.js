@@ -1,37 +1,91 @@
-import { Linking, Platform, Pressable, ScrollView, View } from 'react-native';
-import { checkForUpdate } from '../../lib/updates';
-import { Redirect, router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { getBudgetStatus, getOverview, getStreak, getUtangSummary, listGoals, listTransactions } from '../../lib/db';
-import { GoalMini } from '../../components/goals';
-import { daysBetween, today, dueLabel, greeting, monthName, monthKey, peso, prettyDate } from '../../lib/format';
-import { useQuery, useSettings } from '../../lib/store';
-import { pick } from '../../lib/quips';
 import { useCallback, useEffect, useState } from 'react';
-import { useFocusEffect } from 'expo-router';
-import { radius, useTheme } from '../../lib/theme';
+import { Linking, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Redirect, router, useFocusEffect } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  getBudgetStatus,
+  getOverview,
+  getStreak,
+  getUtangSummary,
+  listBills,
+  listCategories,
+  listGoals,
+  listTransactions,
+  payBill,
+  saveTransaction,
+  setBillReminder,
+} from '../../lib/db';
+import { addDays, daysBetween, dueLabel, greeting, monthKey, monthName, peso, prettyDate, today } from '../../lib/format';
+import { cancelReminder, scheduleBillReminder } from '../../lib/notify';
+import { parseQuickLog } from '../../lib/quicklog';
+import { pick } from '../../lib/quips';
+import { useData, useQuery, useSettings } from '../../lib/store';
+import { fonts, radius, useTheme } from '../../lib/theme';
+import { checkForUpdate } from '../../lib/updates';
 import { Avatar, Badge, Card, EmptyState, GradientCard, IconButton, ProgressBar, Row, Screen, SectionHeader, Txt, tap } from '../../components/ui';
 import { StatPill, TransactionRow } from '../../components/bits';
+import { GoalMini } from '../../components/goals';
+
+const addDaysIso = (n) => addDays(today(), n);
 
 export default function Home() {
   const theme = useTheme();
   const settings = useSettings();
   const [tip, setTip] = useState(() => pick('homeTip'));
   useFocusEffect(useCallback(() => setTip(pick('homeTip')), []));
+  const sqlite = useSQLiteContext();
+  const { bump, toast } = useData();
+  const [quick, setQuick] = useState('');
+  const quickLog = async () => {
+    const text = quick.trim();
+    if (!text) return;
+    const p = parseQuickLog(text, data?.categories || []);
+    if (!p || !p.amount) {
+      setQuick('');
+      router.push(`/add?prefill=${encodeURIComponent(text)}`);
+      return;
+    }
+    await saveTransaction(sqlite, {
+      kind: p.kind,
+      amount: p.amount,
+      category_id: p.category?.id,
+      method: p.method,
+      date: p.date,
+      note: p.note,
+    });
+    tap('success');
+    setQuick('');
+    bump();
+    toast(`${p.kind === 'income' ? '💰' : p.category?.emoji || '✅'} ${p.note} · ${peso(p.amount)} → ${p.category?.name || 'Others'}`);
+  };
+  const markBillPaid = async (b) => {
+    await cancelReminder(b.reminder_id);
+    const next = await payBill(sqlite, b);
+    if (b.remind) {
+      const rid = await scheduleBillReminder({ date: next, name: b.name, amount: b.amount, billId: b.id });
+      await setBillReminder(sqlite, b.id, rid);
+    }
+    tap('success');
+    bump();
+    toast(`${b.emoji} ${b.name} paid! Next due ${prettyDate(next)} ✅`);
+  };
   const [update, setUpdate] = useState(null);
   useEffect(() => {
     checkForUpdate().then(setUpdate);
   }, []);
   const { data } = useQuery(async (db) => {
-    const [overview, utang, recent, streak, goals, budgets] = await Promise.all([
+    const [overview, utang, recent, streak, goals, budgets, categories, bills] = await Promise.all([
       getOverview(db),
       getUtangSummary(db),
       listTransactions(db, { limit: 5 }),
       getStreak(db),
       listGoals(db),
       getBudgetStatus(db),
+      listCategories(db),
+      listBills(db),
     ]);
-    return { overview, utang, recent, streak, goals, budgets };
+    return { overview, utang, recent, streak, goals, budgets, categories, bills };
   });
 
   if (settings.onboarded !== '1') return <Redirect href="/onboarding" />;
@@ -64,6 +118,40 @@ export default function Home() {
           <IconButton icon="settings-outline" onPress={() => router.push('/settings')} label="Settings" />
         </Row>
       </Row>
+
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: theme.card,
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: theme.border,
+          paddingLeft: 14,
+          paddingRight: 6,
+          marginBottom: 14,
+          height: 52,
+        }}
+      >
+        <Txt size={18}>✍️</Txt>
+        <TextInput
+          value={quick}
+          onChangeText={setQuick}
+          onSubmitEditing={quickLog}
+          returnKeyType="done"
+          placeholder="Type it: jeep 13, milk tea 120 gcash"
+          placeholderTextColor={theme.faint}
+          style={{ flex: 1, marginLeft: 10, fontFamily: fonts[600], fontSize: 15, color: theme.text, paddingVertical: 10 }}
+        />
+        {quick.trim() ? (
+          <Pressable
+            onPress={quickLog}
+            style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: theme.brand, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name="arrow-up" size={20} color={theme.onBrand} />
+          </Pressable>
+        ) : null}
+      </View>
 
       {update ? (
         <Card tint="lilac" style={{ marginBottom: 12 }} padding={14} onPress={() => Linking.openURL(update.url)}>
@@ -165,6 +253,53 @@ export default function Home() {
           })}
         </Card>
       ) : null}
+
+      <SectionHeader title="Bills" action={data?.bills?.length ? 'Manage' : null} onAction={() => router.push('/bills')} />
+      {(data?.bills || []).length ? (
+        <Card padding={12}>
+          {data.bills
+            .filter((b) => b.next_due <= addDaysIso(7))
+            .slice(0, 4)
+            .map((b) => {
+              const due = dueLabel(b.next_due);
+              return (
+                <Row key={b.id} gap={12} style={{ paddingVertical: 8, paddingHorizontal: 4 }}>
+                  <Avatar emoji={b.emoji} tintName={b.category_color || 'butter'} size={42} />
+                  <View style={{ flex: 1 }}>
+                    <Txt w={700} size={14.5} numberOfLines={1}>{b.name} · {peso(b.amount)}</Txt>
+                    <View style={{ marginTop: 4 }}>
+                      <Badge text={due.text} tone={due.tone} />
+                    </View>
+                  </View>
+                  <Pressable
+                    onPress={() => markBillPaid(b)}
+                    style={{ paddingHorizontal: 12, height: 34, borderRadius: 17, backgroundColor: theme.brandTint, justifyContent: 'center' }}
+                  >
+                    <Txt w={800} size={13} color={theme.mode === 'light' ? theme.brandDeep : theme.brand}>Bayad ✓</Txt>
+                  </Pressable>
+                </Row>
+              );
+            })}
+          {!data.bills.some((b) => b.next_due <= addDaysIso(7)) ? (
+            <Pressable onPress={() => router.push('/bills')} style={{ padding: 8 }}>
+              <Txt w={600} size={13.5} color="sub">
+                Nothing due this week 😌 Next: {data.bills[0].emoji} {data.bills[0].name} on {prettyDate(data.bills[0].next_due)}
+              </Txt>
+            </Pressable>
+          ) : null}
+        </Card>
+      ) : (
+        <Card onPress={() => router.push('/bills')} padding={16}>
+          <Row gap={12}>
+            <Txt size={28}>🔁</Txt>
+            <View style={{ flex: 1 }}>
+              <Txt w={800} size={15}>Add your bills & subscriptions</Txt>
+              <Txt size={13} color="sub">Netflix, rent, load, tuition… we’ll remind you before they’re due.</Txt>
+            </View>
+            <Txt w={800} size={18} color="brand">→</Txt>
+          </Row>
+        </Card>
+      )}
 
       {(data?.budgets || []).some((b) => b.pct >= 0.8) ? (
         <Card style={{ marginTop: 12 }} padding={14}>

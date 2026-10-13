@@ -31,8 +31,60 @@ export function setupNotifications() {
         name: 'Daily nudge',
         importance: Notifications.AndroidImportance.DEFAULT,
       }).catch(() => {});
+      Notifications.setNotificationChannelAsync('bills', {
+        name: 'Bill reminders',
+        importance: Notifications.AndroidImportance.HIGH,
+      }).catch(() => {});
     }
+    Notifications.setNotificationCategoryAsync('daily_actions', [
+      { identifier: 'log', buttonTitle: 'Log now ✍️', options: { opensAppToForeground: true } },
+      { identifier: 'nospend', buttonTitle: 'Wala akong ginastos 😇', options: { opensAppToForeground: true } },
+    ]).catch(() => {});
+    Notifications.setNotificationCategoryAsync('bill_actions', [
+      { identifier: 'paid', buttonTitle: 'Bayad na ✅', options: { opensAppToForeground: true } },
+    ]).catch(() => {});
   } catch {
+  }
+}
+
+export function onNotificationAction(handler) {
+  if (!Notifications) return () => {};
+  const seen = new Set();
+  const handle = (response) => {
+    if (!response) return;
+    const id = response.notification?.request?.identifier + ':' + response.actionIdentifier;
+    if (seen.has(id)) return;
+    seen.add(id);
+    handler({
+      action: response.actionIdentifier,
+      isDefault: response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER,
+      data: response.notification?.request?.content?.data || {},
+    });
+  };
+  Notifications.getLastNotificationResponseAsync().then(handle).catch(() => {});
+  const sub = Notifications.addNotificationResponseReceivedListener(handle);
+  return () => sub.remove();
+}
+
+export async function scheduleBillReminder({ date, name, amount, billId }) {
+  if (!Notifications || !date) return null;
+  try {
+    const when = parseISODate(date);
+    when.setHours(9, 0, 0, 0);
+    if (when.getTime() <= Date.now() + 60 * 1000) return null;
+    const ok = await ensurePermission();
+    if (!ok) return null;
+    return await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `${name} is due today 🧾`,
+        body: `${peso(amount)} — bayaran na bago makalimutan!`,
+        data: { kind: 'bill', billId },
+        categoryIdentifier: 'bill_actions',
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when, channelId: 'bills' },
+    });
+  } catch {
+    return null;
   }
 }
 
@@ -62,7 +114,7 @@ export async function scheduleDueReminder({ dueDate, personName, direction, amou
         ? `You owe ${personName} ${peso(amount)}. Settle up para walang stress!`
         : `${personName} owes you ${peso(amount)}. Time for a friendly reminder.`;
     return await Notifications.scheduleNotificationAsync({
-      content: { title, body, sound: true },
+      content: { title, body, sound: true, data: { kind: 'utang' } },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: when,
@@ -101,6 +153,7 @@ export async function setDailyNudge(enabled) {
         title: 'Gastos check! 👀',
         body: 'What did you buy today, bestie? Ilista mo na in 10 seconds.',
         data: { kind: DAILY_KEY },
+        categoryIdentifier: 'daily_actions',
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,

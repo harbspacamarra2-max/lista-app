@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform, useColorScheme, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
@@ -20,7 +20,9 @@ import { Toast } from '../components/toast';
 import { Alert } from '../lib/alert';
 import { buildTheme, ThemeContext } from '../lib/theme';
 import { DataContext } from '../lib/store';
-import { setupNotifications } from '../lib/notify';
+import { cancelReminder, onNotificationAction, scheduleBillReminder, setupNotifications } from '../lib/notify';
+import { getBill, getStreak, markNoSpend, payBill, setBillReminder, todaySummary } from '../lib/db';
+import { updateWidget } from '../widget/data';
 import { watchUser, signInWithGoogle, signOutEverywhere } from '../lib/firebase';
 import { decide, getCloudMeta, hasLocalData, pullFromCloud, pushToCloud } from '../lib/cloud';
 
@@ -132,6 +134,51 @@ function AppShell() {
     clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(() => runSync(), 4000);
   }, [db, runSync]);
+
+  const ready = !!settings;
+  useEffect(() => {
+    if (!ready || Platform.OS !== 'android') return;
+    (async () => {
+      try {
+        const [sum, streak] = await Promise.all([todaySummary(db), getStreak(db)]);
+        updateWidget({ ...sum, streak });
+      } catch {
+      }
+    })();
+  }, [ready, version]);
+  useEffect(() => {
+    if (!ready) return undefined;
+    return onNotificationAction(async ({ action, isDefault, data }) => {
+      try {
+        if (data.kind === 'lista-daily-nudge') {
+          if (action === 'nospend') {
+            await markNoSpend(db);
+            setVersion((v) => v + 1);
+            markChanged();
+            toast('No-spend day logged 😇 Streak saved! 🔥');
+          } else {
+            setTimeout(() => router.push('/add'), 300);
+          }
+        } else if (data.kind === 'bill') {
+          const bill = data.billId ? await getBill(db, data.billId) : null;
+          if (action === 'paid' && bill) {
+            const next = await payBill(db, bill);
+            await cancelReminder(bill.reminder_id);
+            const rid = bill.remind ? await scheduleBillReminder({ date: next, name: bill.name, amount: bill.amount, billId: bill.id }) : null;
+            await setBillReminder(db, bill.id, rid);
+            setVersion((v) => v + 1);
+            markChanged();
+            toast(`${bill.emoji} ${bill.name} paid ✅`);
+          } else {
+            setTimeout(() => router.push('/bills'), 300);
+          }
+        } else if (data.kind === 'utang' && isDefault) {
+          setTimeout(() => router.navigate('/utang'), 300);
+        }
+      } catch {
+      }
+    });
+  }, [ready]);
 
   const cloud = useMemo(
     () => ({
@@ -257,6 +304,7 @@ function AppShell() {
           <Stack.Screen name="add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="split" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="goals" />
+          <Stack.Screen name="bills" />
           <Stack.Screen name="goal/[id]" />
           <Stack.Screen name="person/[id]" />
           <Stack.Screen name="settings" />

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, View } from 'react-native';
+import { choosePhoto, deletePhotoFile } from '../lib/photos';
+import { parseQuickLog } from '../lib/quicklog';
 import { Alert } from '../lib/alert';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -53,6 +55,8 @@ export default function Add() {
   const [oldReminder, setOldReminder] = useState(null);
   const [picker, setPicker] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [photo, setPhoto] = useState(null);
+  const [origPhoto, setOrigPhoto] = useState(null);
   const [quick, setQuick] = useState({ expense: [], income: [] });
 
   useEffect(() => {
@@ -77,6 +81,8 @@ export default function Add() {
           setMethod(tx.method || 'cash');
           setDate(tx.date);
           setNote(tx.note || '');
+          setPhoto(tx.photo || null);
+          setOrigPhoto(tx.photo || null);
         }
       } else if (editDebtId) {
         const d = await getDebt(db, editDebtId);
@@ -96,6 +102,17 @@ export default function Add() {
           if (p) setPersonName(p.name);
         }
         setCategoryId((exp[0] || {}).id ?? null);
+        if (params.prefill) {
+          const p = parseQuickLog(String(params.prefill), [...exp, ...inc]);
+          if (p) {
+            setType(p.kind);
+            if (p.amount) setAmount(centavosToInput(p.amount));
+            if (p.category) setCategoryId(p.category.id);
+            setMethod(p.method);
+            setDate(p.date);
+            setNote(p.note);
+          }
+        }
       }
     })();
   }, []);
@@ -154,7 +171,9 @@ export default function Add() {
           method,
           date,
           note: note.trim(),
+          photo,
         });
+        if (origPhoto && origPhoto !== photo) deletePhotoFile(origPhoto);
       }
       tap('success');
       bump();
@@ -184,7 +203,10 @@ export default function Add() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          if (editTxId) await deleteTransaction(db, editTxId);
+          if (editTxId) {
+            deletePhotoFile(origPhoto);
+            await deleteTransaction(db, editTxId);
+          }
           if (editDebtId) {
             if (oldReminder) await cancelReminder(oldReminder);
             await deleteDebt(db, editDebtId);
@@ -377,6 +399,28 @@ export default function Add() {
               onChangeText={setNote}
               maxLength={80}
             />
+
+            {photo ? (
+              <View style={{ marginTop: 14 }}>
+                <Image source={{ uri: photo }} style={{ width: '100%', height: 220, borderRadius: radius.lg, backgroundColor: theme.cardAlt }} resizeMode="cover" />
+                <Pressable
+                  onPress={() => setPhoto(null)}
+                  style={{ position: 'absolute', top: 10, right: 10, backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 16, paddingHorizontal: 12, height: 32, justifyContent: 'center' }}
+                >
+                  <Txt w={700} size={13} color="#FFFFFF">Remove ✕</Txt>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                onPress={async () => {
+                  const uri = await choosePhoto();
+                  if (uri) setPhoto(uri);
+                }}
+                style={{ marginTop: 14, borderRadius: radius.md, borderWidth: 1.5, borderStyle: 'dashed', borderColor: theme.border, paddingVertical: 16, alignItems: 'center' }}
+              >
+                <Txt w={700} size={14} color="sub">📸 Add receipt photo</Txt>
+              </Pressable>
+            )}
           </>
         )}
       </ScrollView>

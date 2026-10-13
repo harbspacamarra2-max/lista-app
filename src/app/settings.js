@@ -304,6 +304,8 @@ export default function Settings() {
         <Divider />
         <NavRow icon="flag-outline" label="Ipon goals" onPress={() => router.push('/goals')} />
         <Divider />
+        <NavRow icon="repeat-outline" label="Bills & subscriptions" onPress={() => router.push('/bills')} />
+        <Divider />
         <Row style={{ paddingVertical: 12, justifyContent: 'space-between' }}>
           <View style={{ flex: 1 }}>
             <Txt w={700} size={15}>Daily reminder</Txt>
