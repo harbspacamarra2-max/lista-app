@@ -3,7 +3,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { today } from './format';
 
 const TABLES = ['categories', 'people', 'transactions', 'debts', 'debt_payments', 'goals', 'goal_entries'];
-const SKIP_SETTINGS = ['pin', 'lock_bio'];
+const SKIP_SETTINGS = ['pin', 'lock_bio', 'cloud_synced_at', 'local_changed_at', 'last_backup'];
 
 export async function buildBackup(db) {
   const data = {};

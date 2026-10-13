@@ -11,6 +11,7 @@ import { accentNames, accents, swatch, swatchNames, useTheme, useThemePref } fro
 import { Avatar, Button, Card, Chip, Divider, Field, IconButton, Row, Screen, Segmented, Sheet, Txt, tap } from '../components/ui';
 import { NavRow } from '../components/bits';
 import { LoveNote } from '../components/lovenote';
+import { GoogleSignInButton } from '../components/googlesignin';
 import { PinPad, biometricsAvailable, hashPin } from '../components/lock';
 import { backupSummary, exportBackup, pickBackup, restoreBackup } from '../lib/backup';
 import { prettyDate, today } from '../lib/format';
@@ -23,7 +24,7 @@ export default function Settings() {
   const db = useSQLiteContext();
   const { pref, setPref, accent, setAccent } = useThemePref();
   const settings = useSettings();
-  const { bump, refreshSettings, toast } = useData();
+  const { bump, refreshSettings, toast, cloud } = useData();
   const params = useLocalSearchParams();
 
   const [editing, setEditing] = useState(null);
@@ -179,6 +180,50 @@ export default function Settings() {
         <Txt w={800} size={20} style={{ marginTop: 10 }}>{settings.name || 'You'}</Txt>
         <Txt size={13} color="sub">Your data stays on this phone 🔒</Txt>
       </Card>
+
+      <Group title="Account & cloud">
+        {cloud.user ? (
+          <View>
+            <Row gap={12} style={{ paddingVertical: 12 }}>
+              <Avatar emoji="☁️" tintName="sky" size={42} />
+              <View style={{ flex: 1 }}>
+                <Txt w={800} size={15} numberOfLines={1}>{cloud.user.displayName || 'Signed in'}</Txt>
+                <Txt size={12.5} color="sub" numberOfLines={1}>{cloud.user.email}</Txt>
+              </View>
+            </Row>
+            <Txt size={12.5} color={cloud.state === 'error' ? 'red' : 'sub'} style={{ marginBottom: 4 }}>
+              {cloud.state === 'syncing'
+                ? 'Syncing… ☁️'
+                : cloud.state === 'error'
+                  ? 'Last sync failed. Check your internet.'
+                  : settings.cloud_synced_at
+                    ? `Synced ${new Date(Number(settings.cloud_synced_at)).toLocaleString()}`
+                    : 'Not synced yet'}
+            </Txt>
+            <Divider />
+            <NavRow icon="sync-outline" label="Sync now" onPress={cloud.syncNow} />
+            <Divider />
+            <NavRow
+              icon="log-out-outline"
+              label="Sign out"
+              onPress={() =>
+                Alert.alert('Sign out?', 'Your data stays on this device. Sign in again anytime to sync.', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Sign out', style: 'destructive', onPress: cloud.signOut },
+                ])
+              }
+            />
+          </View>
+        ) : (
+          <View style={{ paddingVertical: 12 }}>
+            <Txt w={800} size={15}>Back up & sync with Google ☁️</Txt>
+            <Txt size={12.5} color="sub" style={{ marginTop: 2 }}>
+              Optional. Your data follows you to a new phone or the iPhone version. Only you can see it.
+            </Txt>
+            <GoogleSignInButton style={{ marginTop: 12 }} />
+          </View>
+        )}
+      </Group>
 
       <Group title="Profile">
         <NavRow icon="person-outline" label="Your name" value={settings.name || 'Set'} onPress={() => openEdit('name')} />

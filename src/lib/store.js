@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useSQLiteContext } from 'expo-sqlite';
 import { useFocusEffect } from 'expo-router';
 
-export const DataContext = createContext({ version: 0, bump: () => {}, settings: {}, refreshSettings: () => {}, toast: () => {} });
+export const DataContext = createContext({ version: 0, bump: () => {}, settings: {}, refreshSettings: () => {}, toast: () => {}, cloud: { user: null, state: 'idle', signIn: async () => null, signOut: async () => {}, syncNow: () => {} } });
 
 export function useData() {
   return useContext(DataContext);

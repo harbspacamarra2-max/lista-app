@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, useColorScheme, View } from 'react-native';
+import { AppState, Platform, useColorScheme, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -21,6 +21,8 @@ import { Alert } from '../lib/alert';
 import { buildTheme, ThemeContext } from '../lib/theme';
 import { DataContext } from '../lib/store';
 import { setupNotifications } from '../lib/notify';
+import { watchUser, signInWithGoogle, signOutEverywhere } from '../lib/firebase';
+import { decide, getCloudMeta, hasLocalData, pullFromCloud, pushToCloud } from '../lib/cloud';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 setupNotifications();
@@ -34,10 +36,121 @@ function AppShell() {
   const awayAt = useRef(0);
   const [toastState, setToastState] = useState({ message: null, stamp: 0 });
   const toast = useCallback((message) => setToastState({ message, stamp: Date.now() }), []);
-
   const refreshSettings = useCallback(async () => {
     setSettings(await getSettings(db));
   }, [db]);
+  const [user, setUser] = useState(null);
+  const [syncState, setSyncState] = useState('idle');
+  const syncing = useRef(false);
+  const pushTimer = useRef(null);
+  const userRef = useRef(null);
+
+  useEffect(() => watchUser(async (u) => {
+    userRef.current = u;
+    setUser(u);
+    if (u && Platform.OS === 'web') {
+      let pending = null;
+      try {
+        pending = window.localStorage.getItem('sinop_pending_pin');
+        window.localStorage.removeItem('sinop_pending_pin');
+      } catch {
+      }
+      if (pending) {
+        await setSetting(db, 'pin', pending);
+        refreshSettings();
+      }
+    }
+  }), [db, refreshSettings]);
+
+  const runSync = useCallback(async ({ silent = true } = {}) => {
+    const u = userRef.current;
+    if (!u || syncing.current) return;
+    syncing.current = true;
+    setSyncState('syncing');
+    try {
+      const s = await getSettings(db);
+      const meta = await getCloudMeta(u.uid);
+      const action = decide({
+        meta,
+        lastSync: Number(s.cloud_synced_at || 0),
+        localChanged: Number(s.local_changed_at || 0),
+        hasLocal: await hasLocalData(db),
+      });
+      if (action === 'push') await pushToCloud(db, u.uid);
+      if (action === 'pull') {
+        await pullFromCloud(db, u.uid, meta);
+        await refreshSettings();
+        setVersion((v) => v + 1);
+        if (!silent) toast('Synced from the cloud ☁️');
+      }
+      if (action === 'conflict') {
+        await new Promise((resolve) => {
+          Alert.alert(
+            'Which data should we keep? ☁️',
+            `Your cloud backup (from ${new Date(meta.updatedAt).toLocaleString()}) and this device both have changes.`,
+            [
+              {
+                text: 'Keep this device',
+                onPress: async () => {
+                  await pushToCloud(db, u.uid);
+                  resolve();
+                },
+              },
+              {
+                text: 'Use cloud data',
+                style: 'destructive',
+                onPress: async () => {
+                  await pullFromCloud(db, u.uid, meta);
+                  await refreshSettings();
+                  setVersion((v) => v + 1);
+                  resolve();
+                },
+              },
+            ]
+          );
+        });
+      }
+      if (action === 'push' && !silent) toast('Backed up to the cloud ☁️');
+      if (action === 'none' && !silent) toast('All synced ✨');
+      await refreshSettings();
+      setSyncState('idle');
+    } catch (e) {
+      setSyncState('error');
+      if (!silent) Alert.alert('Sync failed', 'Check your internet and try again.');
+    } finally {
+      syncing.current = false;
+    }
+  }, [db, refreshSettings, toast]);
+
+  useEffect(() => {
+    if (user && settings) runSync();
+  }, [user?.uid, !!settings]);
+
+  const markChanged = useCallback(() => {
+    setSetting(db, 'local_changed_at', String(Date.now())).catch(() => {});
+    if (!userRef.current) return;
+    clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => runSync(), 4000);
+  }, [db, runSync]);
+
+  const cloud = useMemo(
+    () => ({
+      user,
+      state: syncState,
+      signIn: async () => {
+        const u = await signInWithGoogle();
+        if (u) toast(`Hi ${u.displayName?.split(' ')[0] || 'there'}! Syncing your data… ☁️`);
+        return u;
+      },
+      signOut: async () => {
+        await signOutEverywhere();
+        toast('Signed out. Your data stays on this device 👋');
+      },
+      syncNow: () => runSync({ silent: false }),
+    }),
+    [user, syncState, runSync, toast]
+  );
+
 
   useEffect(() => {
     refreshSettings();
@@ -50,6 +163,7 @@ function AppShell() {
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'background') awayAt.current = Date.now();
+      if (state === 'active' && userRef.current) runSync();
       if (state === 'active' && awayAt.current && Date.now() - awayAt.current > 30000) {
         getSettings(db).then((s) => {
           if (s.pin) setLocked(true);
@@ -57,7 +171,7 @@ function AppShell() {
       }
     });
     return () => sub.remove();
-  }, [db]);
+  }, [db, runSync]);
 
   const forgotPin = () => {
     Alert.alert(
@@ -113,12 +227,16 @@ function AppShell() {
   const dataValue = useMemo(
     () => ({
       version,
-      bump: () => setVersion((v) => v + 1),
+      bump: () => {
+        setVersion((v) => v + 1);
+        markChanged();
+      },
       settings: settings || {},
       refreshSettings,
       toast,
+      cloud,
     }),
-    [version, settings, refreshSettings, toast]
+    [version, settings, refreshSettings, toast, cloud, markChanged]
   );
 
   if (!settings) return <View style={{ flex: 1, backgroundColor: theme.bg }} />;

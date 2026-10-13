@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Pressable } from 'react-native';
 import { Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
@@ -8,6 +9,7 @@ import { cleanAmountInput, toCentavos } from '../lib/format';
 import { useData } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { Aura, Button, Field, Row, Txt, tap } from '../components/ui';
+import { GoogleSignInButton } from '../components/googlesignin';
 
 const PERKS = [
   ['💸', 'Log gastos in seconds'],
@@ -20,7 +22,11 @@ export default function Onboarding() {
   const theme = useTheme();
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
-  const { refreshSettings, bump } = useData();
+  const { refreshSettings, bump, settings } = useData();
+
+  useEffect(() => {
+    if (settings.onboarded === '1') router.replace('/');
+  }, [settings.onboarded]);
   const [name, setName] = useState('');
   const [budget, setBudget] = useState('');
 
@@ -74,6 +80,13 @@ export default function Onboarding() {
 
         <Button title="Let’s go!" icon="arrow-forward" onPress={start} style={{ marginTop: 28 }} disabled={!name.trim()} />
         <Txt size={12.5} color="faint" center style={{ marginTop: 12 }}>Everything stays on your phone. No sign-up needed.</Txt>
+        <GoogleSignInButton
+          render={({ onPress, busy }) => (
+            <Pressable disabled={busy} onPress={onPress} style={{ marginTop: 18, alignSelf: 'center', padding: 8 }}>
+              <Txt w={700} size={14} color="brand">{busy ? 'Signing in…' : 'Used Sinop before? Sign in to restore ☁️'}</Txt>
+            </Pressable>
+          )}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
