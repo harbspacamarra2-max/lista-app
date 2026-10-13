@@ -47,13 +47,29 @@ jobs:
 
       - name: Use the Sinop signing key
         run: node scripts/android-signing.js
+        env:
+          SINOP_SIGNING_SHA1: EE:22:5B:63:24:2D:8D:17:3B:4C:2D:93:B6:3D:CE:A7:20:2D:7C:4E
 
       - name: Build APK and AAB
         working-directory: android
         run: |
           chmod +x gradlew
           set -o pipefail
-          ./gradlew assembleRelease bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a 2>&1 | tee ../gradle.log || { echo "::error title=Gradle build failed::$(grep -E 'error|Error|FAILED|What went wrong' -A3 ../gradle.log | tail -60 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"; exit 1; }
+          ./gradlew assembleRelease bundleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,armeabi-v7a 2>&1 | tee ../gradle.log
+
+      - name: Report build errors
+        if: failure()
+        run: |
+          esc() { sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g'; }
+          if [ -f gradle.log ]; then
+            m1=$(grep -E "What went wrong" -A 18 gradle.log | head -60 | esc)
+            m2=$(grep -E "^e: |: error:|error: |Execution failed for task|Could not resolve|Could not find" gradle.log | grep -v "^w: " | head -40 | esc)
+            m3=$(grep -E "FAILURE|BUILD FAILED" -B 2 -A 30 gradle.log | head -50 | esc)
+            [ -n "$m1" ] && echo "::error title=What went wrong::$m1"
+            [ -n "$m2" ] && echo "::error title=Compile errors::$m2"
+            [ -n "$m3" ] && echo "::error title=Failure summary::$m3"
+          fi
+          exit 0
 
       - name: Collect files
         run: |
