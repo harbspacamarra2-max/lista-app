@@ -217,6 +217,22 @@ export function think(text, categories = []) {
   const tokens = cleaned.split(' ').filter(Boolean);
   const lc = cleaned.toLowerCase();
 
+  const wallet = (re) => {
+    const m = low.match(re);
+    return m ? { gc: 'gcash', gcash: 'gcash', maya: 'maya', paymaya: 'maya', bank: 'bank', bpi: 'bank', bdo: 'bank', atm: 'bank', card: 'card', cash: 'cash' }[m[1]] : null;
+  };
+  const amt = pickAmount(tokens).amount;
+  if (amt && /\b(cash ?in|cash-in|nag-?cash ?in|load(ed)? (ko )?(sa )?(gcash|maya))\b/.test(low)) {
+    return [{ type: 'transfer', from: 'cash', to: wallet(/\b(gcash|gc|maya|paymaya|bank)\b/) || 'gcash', amount: amt, fee: 0, date: dateWord(low), note: 'Cash in' }];
+  }
+  if (amt && /\b(cash ?out|cash-out|nag-?cash ?out|withdraw|nag-?withdraw|winithdraw)\b/.test(low)) {
+    return [{ type: 'transfer', from: wallet(/\b(gcash|gc|maya|paymaya|bank|bpi|bdo|atm)\b/) || 'gcash', to: 'cash', amount: amt, fee: 0, date: dateWord(low), note: 'Cash out' }];
+  }
+  const tr = low.match(/\b(?:transfer|move|lipat)\b.*\bfrom (gcash|maya|bank|cash|card)\b.*\bto (gcash|maya|bank|cash|card)\b/);
+  if (amt && tr && tr[1] !== tr[2]) {
+    return [{ type: 'transfer', from: tr[1], to: tr[2], amount: amt, fee: 0, date: dateWord(low), note: '' }];
+  }
+
   if (/\b(hati|hati-hati|hatian|hinati|split|kkb)\b/.test(low)) {
     const s = parseSplit(raw, low, tokens, categories);
     if (s) return [s];

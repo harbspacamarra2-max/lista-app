@@ -75,6 +75,9 @@ export default function Utang() {
           <Button title="🍕 Hati-hati" variant="dark" size="md" onPress={() => router.push('/split')} />
         ) : null}
       </Row>
+      <Pressable onPress={() => router.push('/groups')} style={{ marginTop: 12, alignSelf: 'flex-start' }} hitSlop={8}>
+        <Txt w={700} size={13.5} color="brand">👯 Barkadas: see who owes per group →</Txt>
+      </Pressable>
 
       <View style={{ marginTop: 18, gap: 10 }}>
         {data && !open.length ? (

@@ -309,6 +309,9 @@ function AppShell() {
           <Stack.Screen name="person/[id]" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="ask" />
+          <Stack.Screen name="wallets" />
+          <Stack.Screen name="groups" />
+          <Stack.Screen name="group/[id]" />
         </Stack>
         <Toast message={toastState.message} stamp={toastState.stamp} action={toastState.action} />
         {locked && settings.pin ? (

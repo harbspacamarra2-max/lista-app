@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { router } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSQLiteContext } from 'expo-sqlite';
-import { deleteTransaction, listTransactions } from '../../lib/db';
+import { deleteTransaction, listTags, listTransactions } from '../../lib/db';
 import { useUndoDelete } from '../../lib/undo';
 import { daysInMonth, monthKey, peso, pesoShort, prettyDate, today } from '../../lib/format';
 import { useData, useQuery } from '../../lib/store';
@@ -18,7 +18,12 @@ export default function Activity() {
   const [view, setView] = useState('list');
   const [day, setDay] = useState(null);
   const [kind, setKind] = useState(null);
-  const [search, setSearch] = useState('');
+  const params = useLocalSearchParams();
+  const [search, setSearch] = useState(params.q ? String(params.q) : '');
+  useEffect(() => {
+    if (params.q) setSearch(String(params.q));
+  }, [params.q]);
+  const { data: tags } = useQuery((d) => listTags(d), []);
 
   const { data } = useQuery((d) => listTransactions(d, { month, kind, search: search.trim() || undefined }), [month, kind, search]);
 
@@ -64,6 +69,14 @@ export default function Activity() {
         returnKeyType="search"
         right={<Ionicons name="search" size={18} color={theme.faint} />}
       />
+
+      {(tags || []).length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }} contentContainerStyle={{ gap: 8 }}>
+          {tags.map((t) => (
+            <Chip key={t} label={t} small selected={search.toLowerCase() === t} onPress={() => setSearch(search.toLowerCase() === t ? '' : t)} />
+          ))}
+        </ScrollView>
+      ) : null}
 
       <Row style={{ marginTop: 12 }} gap={8}>
         <Chip label="All" selected={!kind} onPress={() => setKind(null)} small />

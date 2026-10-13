@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { today } from './format';
 
-const KEY = process.env.EXPO_PUBLIC_GEMINI_KEY || Constants.expoConfig?.extra?.geminiKey || '';
+const KEY = String(process.env.EXPO_PUBLIC_GEMINI_KEY || Constants.expoConfig?.extra?.geminiKey || '').trim();
 const MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-flash-latest'];
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
 let preferred = 0;
@@ -25,9 +25,9 @@ async function call(model, body, timeout) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
-    const res = await fetch(`${ENDPOINT}/${model}:generateContent?key=${KEY}`, {
+    const res = await fetch(`${ENDPOINT}/${model}:generateContent`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': KEY },
       body: JSON.stringify(body),
       signal: ctrl.signal,
     });
@@ -107,6 +107,9 @@ Action types:
   "owed" = the person paid the user back. "owe" = the user paid the person back.
 - {"type":"split","total":900,"people":["Ana","Ben"],"includeMe":true,"reason":"Samgyup","category":"Food","dueDate":null}
   A bill split equally; the listed people each owe the user their share. includeMe false if the user is not part of the split.
+- {"type":"transfer","from":"cash|gcash|maya|card|bank","to":"cash|gcash|maya|card|bank","amount":500,"fee":15 or 0,"note":"short"}
+  Moving the user's own money between wallets: "cash in GCash 500" = cash to gcash, "cash out 1000 sa GCash" = gcash to cash, "withdraw sa ATM" = bank to cash. Not an expense.
+Notes may include #tags if the user wrote them (keep them as written).
 Filipino/Taglish hints: "umutang si X"/"X umutang"/"nangutang si X"/"pinautang ko si X" = debt owed. "utang ko kay X"/"umutang ako kay X"/"humiram ako kay X" = debt owe. "nagbayad si X"/"binayaran ako ni X" = payment owed. "binayaran ko si X"/"nagbayad ako kay X" = payment owe. "hati"/"hati-hati"/"split"/"KKB" = split. "bukas" = tomorrow, "kahapon" = yesterday, "sa Friday"/"bayad sa Friday" = due on the coming Friday, "katapusan" = end of month, "sahod"/"sweldo" = salary, "baon"/"allowance" = allowance, "1.2k" = 1200.
 Use names exactly as written; match to a known person when it's clearly the same person. Never invent amounts. Pick the closest existing category.`;
 
@@ -142,6 +145,16 @@ export function normalizeActions(list) {
           return { type: 'debt', direction: a.direction === 'owe' ? 'owe' : 'owed', person: String(a.person || '').trim(), amount: toCentavos(a.amount), reason: String(a.reason || '').slice(0, 80), date, dueDate };
         case 'payment':
           return { type: 'payment', direction: a.direction === 'owe' ? 'owe' : 'owed', person: String(a.person || '').trim(), amount: toCentavos(a.amount), date };
+        case 'transfer':
+          return {
+            type: 'transfer',
+            from: ['cash', 'gcash', 'maya', 'card', 'bank'].includes(a.from) ? a.from : 'cash',
+            to: ['cash', 'gcash', 'maya', 'card', 'bank'].includes(a.to) ? a.to : 'gcash',
+            amount: toCentavos(a.amount),
+            fee: toCentavos(a.fee) || 0,
+            date,
+            note: String(a.note || '').slice(0, 40),
+          };
         case 'split':
           return {
             type: 'split',

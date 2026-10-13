@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { today } from './format';
 
-const TABLES = ['categories', 'people', 'transactions', 'debts', 'debt_payments', 'goals', 'goal_entries', 'bills', 'no_spend_days'];
+const TABLES = ['categories', 'people', 'transactions', 'debts', 'debt_payments', 'goals', 'goal_entries', 'bills', 'no_spend_days', 'wallets', 'transfers', 'groups', 'group_members'];
 const SKIP_SETTINGS = ['pin', 'lock_bio', 'cloud_synced_at', 'local_changed_at', 'last_backup'];
 
 export async function buildBackup(db) {
@@ -93,6 +93,7 @@ export async function restoreBackup(db, backup) {
   await db.withTransactionAsync(async () => {
     await db.execAsync(`
       DELETE FROM goal_entries; DELETE FROM goals; DELETE FROM bills; DELETE FROM no_spend_days;
+      DELETE FROM group_members; DELETE FROM groups; DELETE FROM transfers; DELETE FROM wallets;
       DELETE FROM debt_payments; DELETE FROM debts; DELETE FROM people;
       DELETE FROM transactions; DELETE FROM categories;
     `);

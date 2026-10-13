@@ -1,4 +1,4 @@
-import { addPayment, listDebts, listPeople, saveDebt, saveSplit, saveTransaction, setDebtReminder } from './db';
+import { PAYMENT_METHODS, addPayment, addTransfer, listDebts, listPeople, saveDebt, saveSplit, saveTransaction, setDebtReminder } from './db';
 import { peso, prettyDate, today } from './format';
 import { scheduleDueReminder } from './notify';
 
@@ -57,6 +57,14 @@ export function describeAction(a, categories = []) {
             : `✅ ${cap(a.person)} paid you ${a.amount ? peso(a.amount) : '(full)'}`,
         sub: 'Payment on utang',
       };
+    case 'transfer': {
+      const f = PAYMENT_METHODS.find((m) => m.key === a.from) || PAYMENT_METHODS[0];
+      const t = PAYMENT_METHODS.find((m) => m.key === a.to) || PAYMENT_METHODS[0];
+      return {
+        title: `${f.emoji} → ${t.emoji} Move ${peso(a.amount)}`,
+        sub: `${f.label} to ${t.label}${a.fee ? ` · fee ${peso(a.fee)}` : ''}`,
+      };
+    }
     case 'split': {
       const heads = (a.people || []).length + (a.includeMe === false ? 0 : 1);
       return {
@@ -75,6 +83,7 @@ export function isValidAction(a) {
   if (a.type === 'debt') return a.amount > 0 && !!a.person;
   if (a.type === 'payment') return !!a.person;
   if (a.type === 'split') return a.total > 0 && (a.people || []).length > 0;
+  if (a.type === 'transfer') return a.amount > 0 && !!a.from && !!a.to && a.from !== a.to;
   return false;
 }
 
@@ -147,6 +156,11 @@ export async function executeAction(db, a, categories, extra = {}) {
       myShare: a.includeMe === false ? null : { amount: each + extraCents, categoryId: c?.id },
     });
     return `🍕 Split done · ${created.length} utang added`;
+  }
+
+  if (a.type === 'transfer') {
+    await addTransfer(db, { from: a.from, to: a.to, amount: a.amount, fee: a.fee || 0, date: a.date || today(), note: a.note || '' });
+    return `💸 Moved ${peso(a.amount)}`;
   }
 
   throw new Error('Unknown action');

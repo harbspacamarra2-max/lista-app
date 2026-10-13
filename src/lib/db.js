@@ -126,6 +126,33 @@ export async function migrate(db) {
   await addCol('transactions', 'photo', 'photo TEXT');
   await addCol('transactions', 'bill_id', 'bill_id INTEGER');
   await addCol('debt_payments', 'photo', 'photo TEXT');
+  await addCol('debts', 'principal', 'principal INTEGER');
+  await addCol('debts', 'interest', 'interest REAL NOT NULL DEFAULT 0');
+  await addCol('debts', 'plan_count', 'plan_count INTEGER NOT NULL DEFAULT 0');
+  await addCol('debts', 'plan_freq', "plan_freq TEXT NOT NULL DEFAULT 'monthly'");
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS wallets (key TEXT PRIMARY KEY NOT NULL, start INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS transfers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_method TEXT NOT NULL,
+      to_method TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      fee INTEGER NOT NULL DEFAULT 0,
+      date TEXT NOT NULL,
+      note TEXT
+    );
+    CREATE TABLE IF NOT EXISTS groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      emoji TEXT NOT NULL DEFAULT '👯',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS group_members (
+      group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+      person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+      PRIMARY KEY (group_id, person_id)
+    );
+  `);
   const cols = await db.getAllAsync('PRAGMA table_info(categories)');
   if (!cols.some((c) => c.name === 'budget')) {
     await db.execAsync('ALTER TABLE categories ADD COLUMN budget INTEGER NOT NULL DEFAULT 0');
@@ -300,12 +327,41 @@ export async function deletePerson(db, id) {
   await db.runAsync('DELETE FROM people WHERE id = ?', id);
 }
 
+const FREQ_DAYS = { weekly: 7, biweekly: 14, monthly: 0 };
+
+export function stepDate(iso, freq, n) {
+  if (freq === 'monthly') {
+    const [y, m, d] = iso.split('-').map(Number);
+    const target = new Date(y, m - 1 + n, 1);
+    const last = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(d, last));
+    const mm = String(target.getMonth() + 1).padStart(2, '0');
+    const dd = String(target.getDate()).padStart(2, '0');
+    return `${target.getFullYear()}-${mm}-${dd}`;
+  }
+  return addDays(iso, (FREQ_DAYS[freq] || 30) * n);
+}
+
 function decorateDebt(d) {
   const remaining = Math.max(0, d.amount - (d.paid || 0));
   let status = 'unpaid';
   if (remaining === 0) status = 'paid';
   else if ((d.paid || 0) > 0) status = 'partial';
-  return { ...d, remaining, status };
+  let plan = null;
+  if (d.plan_count > 1) {
+    const each = Math.ceil(d.amount / d.plan_count);
+    const done = Math.min(d.plan_count, Math.floor((d.paid || 0) / each + 0.001));
+    const first = d.due_date || stepDate(d.date, d.plan_freq, 1);
+    plan = {
+      each,
+      count: d.plan_count,
+      done,
+      freq: d.plan_freq,
+      nextDue: remaining > 0 ? stepDate(first, d.plan_freq, done) : null,
+      nextAmount: Math.min(each, remaining),
+    };
+  }
+  return { ...d, remaining, status, plan };
 }
 
 const DEBT_SELECT = `
@@ -352,9 +408,10 @@ export async function getUtangSummary(db) {
       p.open += 1;
       if (d.direction === 'owe') { p.owe += d.remaining; totalOwe += d.remaining; }
       else { p.owed += d.remaining; totalOwed += d.remaining; }
-      if (d.due_date) {
-        if (!p.nextDue || d.due_date < p.nextDue) p.nextDue = d.due_date;
-        if (d.due_date <= addDays(today(), 7)) dueSoon.push(d);
+      const due = d.plan?.nextDue || d.due_date;
+      if (due) {
+        if (!p.nextDue || due < p.nextDue) p.nextDue = due;
+        if (due <= addDays(today(), 7)) dueSoon.push({ ...d, due_date: due });
       }
     }
   }
@@ -362,18 +419,24 @@ export async function getUtangSummary(db) {
   return { totalOwe, totalOwed, people: [...map.values()], dueSoon };
 }
 
-export async function saveDebt(db, { id, personId, personName, direction, amount, reason, date, due_date }) {
+export function withInterest(principal, rate) {
+  return Math.round(principal * (1 + (Number(rate) || 0) / 100));
+}
+
+export async function saveDebt(db, { id, personId, personName, direction, amount, reason, date, due_date, interest = 0, plan_count = 0, plan_freq = 'monthly' }) {
   const pid = personId || (await findOrCreatePerson(db, personName));
+  const rate = Number(interest) || 0;
+  const total = withInterest(amount, rate);
   if (id) {
     await db.runAsync(
-      'UPDATE debts SET person_id=?, direction=?, amount=?, reason=?, date=?, due_date=? WHERE id=?',
-      pid, direction, amount, reason || null, date, due_date || null, id
+      'UPDATE debts SET person_id=?, direction=?, amount=?, principal=?, interest=?, plan_count=?, plan_freq=?, reason=?, date=?, due_date=? WHERE id=?',
+      pid, direction, total, amount, rate, plan_count || 0, plan_freq || 'monthly', reason || null, date, due_date || null, id
     );
     return { id, personId: pid };
   }
   const r = await db.runAsync(
-    'INSERT INTO debts (person_id, direction, amount, reason, date, due_date) VALUES (?, ?, ?, ?, ?, ?)',
-    pid, direction, amount, reason || null, date, due_date || null
+    'INSERT INTO debts (person_id, direction, amount, principal, interest, plan_count, plan_freq, reason, date, due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    pid, direction, total, amount, rate, plan_count || 0, plan_freq || 'monthly', reason || null, date, due_date || null
   );
   return { id: r.lastInsertRowId, personId: pid };
 }
@@ -425,6 +488,8 @@ export async function resetAll(db) {
   await db.execAsync(`
     DELETE FROM bills; DELETE FROM no_spend_days;
     DELETE FROM goal_entries; DELETE FROM goals;
+    DELETE FROM transfers; DELETE FROM wallets;
+    DELETE FROM group_members; DELETE FROM groups;
     UPDATE categories SET budget = 0;
     DELETE FROM debt_payments; DELETE FROM debts; DELETE FROM people;
     DELETE FROM transactions; DELETE FROM categories WHERE is_default = 0;
@@ -688,4 +753,144 @@ export async function restoreSnapshot(db, snap) {
 
 export function photosIn(snap) {
   return [...(snap.transactions || []), ...(snap.debt_payments || [])].map((r) => r.photo).filter(Boolean);
+}
+
+export async function getWallets(db) {
+  const [starts, flows, outs, ins] = await Promise.all([
+    db.getAllAsync('SELECT * FROM wallets'),
+    db.getAllAsync(`SELECT method, SUM(CASE WHEN kind = 'income' THEN amount ELSE -amount END) AS net, COUNT(*) AS n FROM transactions GROUP BY method`),
+    db.getAllAsync('SELECT from_method AS method, SUM(amount + fee) AS total, COUNT(*) AS n FROM transfers GROUP BY from_method'),
+    db.getAllAsync('SELECT to_method AS method, SUM(amount) AS total, COUNT(*) AS n FROM transfers GROUP BY to_method'),
+  ]);
+  const by = (rows) => Object.fromEntries(rows.map((r) => [r.key ?? r.method, r]));
+  const S = by(starts);
+  const F = by(flows);
+  const O = by(outs);
+  const I = by(ins);
+  return PAYMENT_METHODS.map((m) => {
+    const start = S[m.key]?.start || 0;
+    const balance = start + (F[m.key]?.net || 0) - (O[m.key]?.total || 0) + (I[m.key]?.total || 0);
+    const used = !!(S[m.key] || F[m.key] || O[m.key] || I[m.key]);
+    return { ...m, start, balance, used, hidden: !!S[m.key]?.hidden, setUp: !!S[m.key] };
+  });
+}
+
+export async function setWalletStart(db, key, start) {
+  await db.runAsync(
+    'INSERT INTO wallets (key, start) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET start = excluded.start',
+    key, start
+  );
+}
+
+export async function setWalletBalance(db, key, balance) {
+  const list = await getWallets(db);
+  const w = list.find((x) => x.key === key);
+  if (!w) return;
+  await setWalletStart(db, key, w.start + (balance - w.balance));
+}
+
+export async function addTransfer(db, { from, to, amount, fee = 0, date, note }) {
+  const r = await db.runAsync(
+    'INSERT INTO transfers (from_method, to_method, amount, fee, date, note) VALUES (?, ?, ?, ?, ?, ?)',
+    from, to, amount, fee || 0, date || today(), note || null
+  );
+  return r.lastInsertRowId;
+}
+
+export function listTransfers(db, limit = 30) {
+  return db.getAllAsync(`SELECT * FROM transfers ORDER BY date DESC, id DESC LIMIT ${Number(limit)}`);
+}
+
+export async function deleteTransfer(db, id) {
+  await db.runAsync('DELETE FROM transfers WHERE id = ?', id);
+}
+
+export async function listGroups(db) {
+  const groups = await db.getAllAsync('SELECT * FROM groups ORDER BY id DESC');
+  const members = await db.getAllAsync(
+    'SELECT gm.group_id, p.* FROM group_members gm JOIN people p ON p.id = gm.person_id ORDER BY p.name COLLATE NOCASE'
+  );
+  return groups.map((g) => ({ ...g, members: members.filter((m) => m.group_id === g.id) }));
+}
+
+export async function getGroup(db, id) {
+  const g = await db.getFirstAsync('SELECT * FROM groups WHERE id = ?', id);
+  if (!g) return null;
+  const members = await db.getAllAsync(
+    'SELECT p.* FROM group_members gm JOIN people p ON p.id = gm.person_id WHERE gm.group_id = ? ORDER BY p.name COLLATE NOCASE',
+    id
+  );
+  return { ...g, members };
+}
+
+export async function saveGroup(db, { id, name, emoji, memberNames = [] }) {
+  let gid = id;
+  await db.withTransactionAsync(async () => {
+    if (gid) {
+      await db.runAsync('UPDATE groups SET name = ?, emoji = ? WHERE id = ?', name.trim(), emoji || '👯', gid);
+      await db.runAsync('DELETE FROM group_members WHERE group_id = ?', gid);
+    } else {
+      const r = await db.runAsync('INSERT INTO groups (name, emoji) VALUES (?, ?)', name.trim(), emoji || '👯');
+      gid = r.lastInsertRowId;
+    }
+    for (const n of memberNames) {
+      if (!n.trim()) continue;
+      const pid = await findOrCreatePerson(db, n);
+      await db.runAsync('INSERT OR IGNORE INTO group_members (group_id, person_id) VALUES (?, ?)', gid, pid);
+    }
+  });
+  return gid;
+}
+
+export async function deleteGroup(db, id) {
+  await db.runAsync('DELETE FROM group_members WHERE group_id = ?', id);
+  await db.runAsync('DELETE FROM groups WHERE id = ?', id);
+}
+
+export async function settleNet(db, personId, date = today()) {
+  const debts = (await listDebts(db, { personId })).filter((d) => d.remaining > 0);
+  const owe = debts.filter((d) => d.direction === 'owe').sort((a, b) => (a.date < b.date ? -1 : 1));
+  const owed = debts.filter((d) => d.direction === 'owed').sort((a, b) => (a.date < b.date ? -1 : 1));
+  const totalOwe = owe.reduce((s, d) => s + d.remaining, 0);
+  const totalOwed = owed.reduce((s, d) => s + d.remaining, 0);
+  let cancel = Math.min(totalOwe, totalOwed);
+  if (!cancel) return { cancelled: 0, net: totalOwed - totalOwe };
+  await db.withTransactionAsync(async () => {
+    for (const list of [owe, owed]) {
+      let left = cancel;
+      for (const d of list) {
+        if (left <= 0) break;
+        const pay = Math.min(left, d.remaining);
+        await db.runAsync('INSERT INTO debt_payments (debt_id, amount, date, note) VALUES (?, ?, ?, ?)', d.id, pay, date, 'Quits na (net)');
+        left -= pay;
+      }
+    }
+  });
+  return { cancelled: cancel, net: totalOwed - totalOwe };
+}
+
+export async function getTagReport(db, month) {
+  const rows = await db.getAllAsync(
+    `SELECT note, amount, kind FROM transactions WHERE note LIKE '%#%' AND date >= ? AND date <= ?`,
+    `${month}-01`, `${month}-31`
+  );
+  const map = new Map();
+  for (const r of rows) {
+    const tags = new Set((r.note.match(/#[A-Za-z0-9_\u00C0-\u024F-]+/g) || []).map((t) => t.toLowerCase()));
+    for (const t of tags) {
+      const cur = map.get(t) || { tag: t, spent: 0, earned: 0, count: 0 };
+      if (r.kind === 'expense') cur.spent += r.amount;
+      else cur.earned += r.amount;
+      cur.count += 1;
+      map.set(t, cur);
+    }
+  }
+  return [...map.values()].sort((a, b) => b.spent - a.spent);
+}
+
+export async function listTags(db) {
+  const rows = await db.getAllAsync(`SELECT note FROM transactions WHERE note LIKE '%#%' ORDER BY date DESC LIMIT 300`);
+  const seen = new Map();
+  for (const r of rows) for (const t of r.note.match(/#[A-Za-z0-9_\u00C0-\u024F-]+/g) || []) seen.set(t.toLowerCase(), (seen.get(t.toLowerCase()) || 0) + 1);
+  return [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).slice(0, 12);
 }

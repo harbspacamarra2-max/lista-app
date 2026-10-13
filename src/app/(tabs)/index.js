@@ -8,7 +8,9 @@ import {
   getOverview,
   getStreak,
   getUtangSummary,
+  getWallets,
   listBills,
+  listGroups,
   listCategories,
   listGoals,
   listTransactions,
@@ -62,7 +64,7 @@ export default function Home() {
     checkForUpdate().then(setUpdate);
   }, []);
   const { data } = useQuery(async (db) => {
-    const [overview, utang, recent, streak, goals, budgets, categories, bills] = await Promise.all([
+    const [overview, utang, recent, streak, goals, budgets, categories, bills, wallets, groups] = await Promise.all([
       getOverview(db),
       getUtangSummary(db),
       listTransactions(db, { limit: 5 }),
@@ -71,8 +73,14 @@ export default function Home() {
       getBudgetStatus(db),
       listCategories(db),
       listBills(db),
+      getWallets(db),
+      listGroups(db),
     ]);
-    return { overview, utang, recent, streak, goals, budgets, categories, bills };
+    return {
+      overview, utang, recent, streak, goals, budgets, categories, bills,
+      wallets: { used: wallets.some((w) => w.setUp), total: wallets.reduce((t, w) => t + w.balance, 0) },
+      groups: groups.length,
+    };
   });
 
   if (settings.onboarded !== '1') return <Redirect href="/onboarding" />;
@@ -236,6 +244,11 @@ export default function Home() {
       <Row style={{ marginTop: 12 }} gap={10}>
         <StatPill label="Today" value={peso(o.spentToday)} />
         <StatPill label="This week" value={peso(o.spentWeek)} />
+      </Row>
+
+      <Row gap={10} style={{ marginTop: 10 }}>
+        <QuickLink emoji="👛" label="Wallets" value={data?.wallets?.used ? peso(data.wallets.total) : 'Set up'} onPress={() => router.push('/wallets')} />
+        <QuickLink emoji="👯" label="Barkadas" value={data?.groups ? `${data.groups} ${data.groups === 1 ? 'group' : 'groups'}` : 'Make one'} onPress={() => router.push('/groups')} />
       </Row>
 
       <SectionHeader title="Utang" action="See all" onAction={() => router.navigate('/utang')} />
@@ -410,6 +423,20 @@ function UtangTile({ title, emoji, amount, tint, ink }) {
       <Txt size={22}>{emoji}</Txt>
       <Txt w={700} size={13} color={theme[ink]} style={{ marginTop: 10 }}>{title}</Txt>
       <Txt w={800} size={20} color={theme[ink]} numberOfLines={1} adjustsFontSizeToFit>{peso(amount)}</Txt>
+    </Card>
+  );
+}
+
+function QuickLink({ emoji, label, value, onPress }) {
+  return (
+    <Card onPress={onPress} padding={14} style={{ flex: 1 }}>
+      <Row gap={10}>
+        <Txt size={22}>{emoji}</Txt>
+        <View style={{ flex: 1 }}>
+          <Txt w={700} size={12.5} color="sub">{label}</Txt>
+          <Txt w={800} size={15.5} numberOfLines={1}>{value}</Txt>
+        </View>
+      </Row>
     </Card>
   );
 }

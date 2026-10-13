@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, useWindowDimensions, View } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { PAYMENT_METHODS, getBudgetStatus, getMonthReport, setSetting, spendingByMethod } from '../../lib/db';
+import { PAYMENT_METHODS, getBudgetStatus, getMonthReport, getTagReport, setSetting, spendingByMethod } from '../../lib/db';
 import { aiReady, aiTips, friendlyAiError } from '../../lib/ai';
 import { buildSnapshot } from '../../lib/snapshot';
 import { daysInMonth, monthKey, monthLabel, monthName, peso, shiftMonth, today } from '../../lib/format';
@@ -16,8 +16,8 @@ export default function Reports() {
   const { width } = useWindowDimensions();
   const [month, setMonth] = useState(monthKey());
   const { data } = useQuery(async (db) => {
-    const [rep, wallets, budgets] = await Promise.all([getMonthReport(db, month), spendingByMethod(db, month), getBudgetStatus(db, month)]);
-    return { ...rep, wallets, budgets };
+    const [rep, wallets, budgets, tags] = await Promise.all([getMonthReport(db, month), spendingByMethod(db, month), getBudgetStatus(db, month), getTagReport(db, month)]);
+    return { ...rep, wallets, budgets, tags };
   }, [month]);
 
   const r = data || { byCategory: [], daily: [], spent: 0, income: 0, prevSpent: 0 };
@@ -147,6 +147,23 @@ export default function Reports() {
                 </View>
               );
             })}
+          </Card>
+        </>
+      ) : null}
+
+      {(data?.tags || []).length ? (
+        <>
+          <SectionHeader title="Tags" />
+          <Card>
+            {data.tags.map((t) => (
+              <Pressable key={t.tag} onPress={() => router.navigate(`/activity?q=${encodeURIComponent(t.tag)}`)} style={{ paddingVertical: 8 }}>
+                <Row style={{ justifyContent: 'space-between' }}>
+                  <Txt w={700} size={14.5} color="brand">{t.tag}</Txt>
+                  <Txt w={800} size={14.5}>{t.spent ? peso(t.spent) : `+${peso(t.earned)}`}</Txt>
+                </Row>
+                <Txt size={12} color="sub">{t.count} {t.count === 1 ? 'entry' : 'entries'}</Txt>
+              </Pressable>
+            ))}
           </Card>
         </>
       ) : null}

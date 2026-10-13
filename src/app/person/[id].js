@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   addPayment,
   deletePayment,
+  settleNet,
   deletePerson,
   getPerson,
   listDebts,
@@ -78,7 +79,27 @@ export default function PersonScreen() {
   const openPay = (debt) => {
     setPayFor(debt);
     setPayPhoto(null);
-    setPayAmount(centavosToInput(debt.remaining));
+    setPayAmount(centavosToInput(debt.plan ? debt.plan.nextAmount : debt.remaining));
+  };
+
+  const quits = () => {
+    const cancel = Math.min(owe, owed);
+    Alert.alert(
+      'Quits na? 🤝',
+      `You owe ${person.name} ${peso(owe)} and they owe you ${peso(owed)}. We’ll cancel out ${peso(cancel)} on both sides, so only ${peso(Math.abs(net))} is left${net > 0 ? ` for ${person.name} to pay` : net < 0 ? ' for you to pay' : ''}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Quits na',
+          onPress: async () => {
+            await settleNet(db, personId);
+            tap('success');
+            bump();
+            if (net === 0) setParty({ title: 'quits na!', subtitle: `You and ${person.name} are even 🫶` });
+          },
+        },
+      ]
+    );
   };
 
   const savePayment = async () => {
@@ -186,6 +207,9 @@ export default function PersonScreen() {
           <Button title="Remind" icon="paper-plane" variant="dark" size="md" style={{ flex: 1 }} onPress={remind} />
         ) : null}
       </Row>
+      {owe > 0 && owed > 0 ? (
+        <Button title="Quits na: cancel out both sides 🤝" variant="ghost" size="md" style={{ marginTop: 10 }} onPress={quits} />
+      ) : null}
 
       <SectionHeader title={open.length ? 'Open' : 'Nothing open'} />
       <View style={{ gap: 10 }}>
@@ -324,9 +348,30 @@ function DebtCard({ d, payments, onPay, onUndo, onPhoto }) {
         </View>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
           <DebtStatus debt={d} />
-          {due ? <Badge text={due.text} tone={due.tone} /> : null}
+          {d.plan && d.remaining > 0 ? (
+            <Badge text={dueLabel(d.plan.nextDue)?.text || prettyDate(d.plan.nextDue)} tone={dueLabel(d.plan.nextDue)?.tone || 'calm'} />
+          ) : due ? (
+            <Badge text={due.text} tone={due.tone} />
+          ) : null}
         </View>
       </Row>
+
+      {d.interest > 0 || d.plan ? (
+        <View style={{ marginTop: 10, flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {d.interest > 0 ? (
+            <View style={{ backgroundColor: theme.butter, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4 }}>
+              <Txt w={700} size={11.5} color={theme.butterInk}>+{d.interest}% interest · from {peso(d.principal ?? d.amount)}</Txt>
+            </View>
+          ) : null}
+          {d.plan ? (
+            <View style={{ backgroundColor: theme.sky, borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4 }}>
+              <Txt w={700} size={11.5} color={theme.skyInk}>
+                Hulog {Math.min(d.plan.done + (d.remaining > 0 ? 1 : 0), d.plan.count)}/{d.plan.count} · {peso(d.plan.each)} {d.plan.freq === 'weekly' ? 'weekly' : d.plan.freq === 'biweekly' ? 'every 2 wks' : 'monthly'}
+              </Txt>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
 
       {d.paid > 0 ? (
         <View style={{ marginTop: 12 }}>

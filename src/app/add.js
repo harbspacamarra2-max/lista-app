@@ -19,6 +19,8 @@ import {
   listCategories,
   listPeople,
   saveDebt,
+  stepDate,
+  withInterest,
   saveTransaction,
   setDebtReminder,
 } from '../lib/db';
@@ -53,6 +55,10 @@ export default function Add() {
   const [people, setPeople] = useState([]);
   const [reason, setReason] = useState('');
   const [dueDate, setDueDate] = useState(null);
+  const [interest, setInterest] = useState('');
+  const [planCount, setPlanCount] = useState(0);
+  const [planFreq, setPlanFreq] = useState('monthly');
+  const [extras, setExtras] = useState(false);
   const [remind, setRemind] = useState(true);
   const [oldReminder, setOldReminder] = useState(null);
   const [picker, setPicker] = useState(null);
@@ -89,7 +95,13 @@ export default function Add() {
       } else if (editDebtId) {
         const d = await getDebt(db, editDebtId);
         if (d) {
-          setAmount(centavosToInput(d.amount));
+          setAmount(centavosToInput(d.principal ?? d.amount));
+          if (d.interest) setInterest(String(d.interest));
+          if (d.plan_count > 1) {
+            setPlanCount(d.plan_count);
+            setPlanFreq(d.plan_freq || 'monthly');
+          }
+          if (d.interest || d.plan_count > 1) setExtras(true);
           setDirection(d.direction);
           setPersonName(d.person_name);
           setReason(d.reason || '');
@@ -154,6 +166,9 @@ export default function Add() {
           personName: personName.trim(),
           direction,
           amount: cents,
+          interest: Number(interest) || 0,
+          plan_count: planCount,
+          plan_freq: planFreq,
           reason: reason.trim(),
           date,
           due_date: dueDate,
@@ -301,6 +316,56 @@ export default function Add() {
             <Label>For what?</Label>
             <Field placeholder="Lunch, pamasahe, concert ticket…" value={reason} onChangeText={setReason} />
 
+            {extras ? (
+              <>
+                <Label>Interest (optional)</Label>
+                <Field
+                  placeholder="0"
+                  value={interest}
+                  onChangeText={(t) => setInterest(t.replace(/[^0-9.]/g, '').slice(0, 5))}
+                  keyboardType="decimal-pad"
+                  right={<Txt w={800} size={15} color="sub">%</Txt>}
+                />
+                <Label>Hulugan (installments)</Label>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {[0, 2, 3, 4, 6, 12].map((n) => (
+                    <Chip key={n} label={n ? `${n}x` : 'One-time'} small selected={planCount === n} onPress={() => setPlanCount(n)} />
+                  ))}
+                </ScrollView>
+                {planCount > 1 ? (
+                  <Segmented
+                    style={{ marginTop: 10 }}
+                    value={planFreq}
+                    onChange={setPlanFreq}
+                    options={[
+                      { value: 'weekly', label: 'Weekly' },
+                      { value: 'biweekly', label: 'Every 2 wks' },
+                      { value: 'monthly', label: 'Monthly' },
+                    ]}
+                  />
+                ) : null}
+                {cents > 0 && (Number(interest) > 0 || planCount > 1) ? (
+                  <View style={{ marginTop: 12, backgroundColor: theme.brandTint, borderRadius: radius.md, padding: 12 }}>
+                    <Txt w={700} size={13.5} color={theme.mode === 'light' ? theme.brandDeep : theme.brand}>
+                      {`Total ${peso(withInterest(cents, interest))}`}
+                      {planCount > 1
+                        ? ` · ${peso(Math.ceil(withInterest(cents, interest) / planCount))} ${planFreq === 'weekly' ? 'every week' : planFreq === 'biweekly' ? 'every 2 weeks' : 'every month'} × ${planCount}`
+                        : ''}
+                    </Txt>
+                    {planCount > 1 ? (
+                      <Txt size={12} color="sub" style={{ marginTop: 2 }}>
+                        First hulog: {prettyDate(dueDate || stepDate(date, planFreq, 1))}. Set “Due” below to change it.
+                      </Txt>
+                    ) : null}
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <Pressable onPress={() => setExtras(true)} style={{ marginTop: 14, alignSelf: 'flex-start' }} hitSlop={8}>
+                <Txt w={700} size={13.5} color="brand">＋ Add interest or hulugan</Txt>
+              </Pressable>
+            )}
+
             <Label>Dates</Label>
             <Row gap={10}>
               <DateButton icon="calendar-outline" label="Borrowed" value={prettyDate(date)} onPress={() => setPicker('date')} />
@@ -390,6 +455,7 @@ export default function Add() {
               onChangeText={setNote}
               maxLength={80}
             />
+            <Txt size={12} color="faint" style={{ marginTop: 6, marginLeft: 4 }}>Tip: add #tags like #school or #date to group things in Reports.</Txt>
 
             {photo ? (
               <View style={{ marginTop: 14 }}>

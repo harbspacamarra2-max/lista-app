@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { listCategories, listPeople, saveSplit, setDebtReminder } from '../lib/db';
+import { listCategories, listGroups, listPeople, saveSplit, setDebtReminder } from '../lib/db';
 import { addDays, cleanAmountInput, peso, prettyDate, toCentavos, today } from '../lib/format';
 import { scheduleDueReminder } from '../lib/notify';
 import { useData } from '../lib/store';
@@ -33,15 +33,31 @@ export default function Split() {
   const [dueDate, setDueDate] = useState(null);
   const [picker, setPicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [groups, setGroups] = useState([]);
+  const params = useLocalSearchParams();
 
   useEffect(() => {
     (async () => {
-      const [ppl, cats] = await Promise.all([listPeople(db), listCategories(db, 'expense')]);
+      const [ppl, cats, grps] = await Promise.all([listPeople(db), listCategories(db, 'expense'), listGroups(db)]);
       setPeople(ppl);
       setCategories(cats);
       setCategoryId((cats[0] || {}).id ?? null);
+      setGroups(grps.filter((g) => g.members.length));
+      const start = grps.find((g) => String(g.id) === String(params.groupId));
+      if (start) {
+        setFriends(start.members.map((m) => ({ name: m.name, custom: '' })));
+        if (!reason) setReason(`${start.emoji} ${start.name}`);
+      }
     })();
   }, [db]);
+
+  const addGroup = (g) => {
+    tap();
+    setFriends((fs) => {
+      const have = new Set(fs.map((f) => f.name.toLowerCase()));
+      return [...fs, ...g.members.filter((m) => !have.has(m.name.toLowerCase())).map((m) => ({ name: m.name, custom: '' }))];
+    });
+  };
 
   const totalC = toCentavos(total);
   const heads = friends.length + (includeMe ? 1 : 0);
@@ -125,6 +141,13 @@ export default function Split() {
         <Field placeholder="What for? e.g. Samgyup night" value={reason} onChangeText={setReason} style={{ marginTop: 6 }} maxLength={40} />
 
         <Label>Who’s in?</Label>
+        {groups.length ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 10 }}>
+            {groups.map((g) => (
+              <Chip key={g.id} label={`${g.name} (${g.members.length})`} emoji={g.emoji} small onPress={() => addGroup(g)} />
+            ))}
+          </ScrollView>
+        ) : null}
         <Row gap={8} style={{ flexWrap: 'wrap' }}>
           <Chip label="Me" emoji="🙋" selected={includeMe} onPress={() => setIncludeMe((v) => !v)} />
           {friends.map((f) => (

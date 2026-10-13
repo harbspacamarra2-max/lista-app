@@ -342,6 +342,10 @@ export default function Settings() {
           }}
         />
         <Divider />
+        <NavRow icon="wallet-outline" label="Wallets & transfers" onPress={() => router.push('/wallets')} />
+        <Divider />
+        <NavRow icon="people-outline" label="Barkadas" onPress={() => router.push('/groups')} />
+        <Divider />
         <NavRow icon="flag-outline" label="Ipon goals" onPress={() => router.push('/goals')} />
         <Divider />
         <NavRow icon="repeat-outline" label="Bills & subscriptions" onPress={() => router.push('/bills')} />
