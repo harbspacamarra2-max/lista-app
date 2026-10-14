@@ -35,6 +35,8 @@ jobs:
         run: node scripts/web-postbuild.js
         env:
           WEB_BASE: /${{ github.event.repository.name }}
+      - name: Add block checklist
+        run: cp -r checklist dist/checklist
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

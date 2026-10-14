@@ -1,0 +1,15 @@
+{
+  "name": "Block Checklist",
+  "short_name": "Checklist",
+  "description": "See which families already have each requirement for the block.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FFF8F1",
+  "theme_color": "#E8641C",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
