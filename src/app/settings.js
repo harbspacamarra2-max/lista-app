@@ -17,6 +17,7 @@ import { backupSummary, exportBackup, pickBackup, restoreBackup } from '../lib/b
 import { prettyDate, today } from '../lib/format';
 import { currentVersion } from '../lib/updates';
 import { aiReady, hasAiKey } from '../lib/ai';
+import { isDeveloper } from '../lib/feedback';
 
 const EMOJI_CHOICES = ['☕', '🍔', '🧋', '🍕', '🚗', '⛽', '🏠', '👕', '💄', '🐶', '🎬', '🎵', '🎓', '✈️', '🏋️', '🎁', '🧾', '💻', '📦', '🙏'];
 
@@ -373,6 +374,10 @@ export default function Settings() {
         <NavRow icon="share-outline" label="Export as CSV" onPress={doExport} />
         <Divider />
         <NavRow icon="refresh-outline" label="Reset all data" onPress={doReset} danger />
+      </Group>
+
+      <Group title="Help us improve">
+        <NavRow icon="chatbubble-ellipses-outline" label="Send feedback" value={isDeveloper(cloud.user) ? 'Inbox' : undefined} onPress={() => router.push('/feedback')} />
       </Group>
 
       <Pressable onPress={secretTap} hitSlop={12} style={{ marginTop: 24, paddingVertical: 6 }}>

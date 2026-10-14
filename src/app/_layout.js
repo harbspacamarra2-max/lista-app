@@ -308,6 +308,7 @@ function AppShell() {
           <Stack.Screen name="goal/[id]" />
           <Stack.Screen name="person/[id]" />
           <Stack.Screen name="settings" />
+          <Stack.Screen name="feedback" />
           <Stack.Screen name="ask" />
           <Stack.Screen name="wallets" />
           <Stack.Screen name="groups" />
