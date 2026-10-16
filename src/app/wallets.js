@@ -14,6 +14,54 @@ const SUGGESTIONS = [
   ['Landbank', '🌾'], ['Metrobank', '🏙️'], ['Security Bank', '🛡️'], ['RCBC', '🏛️'], ['PNB', '🏦'], ['CIMB', '❤️'],
   ['Tonik', '💜'], ['ShopeePay', '🛍️'], ['GrabPay', '💚'], ['Coins.ph', '🪙'], ['Savings', '🐷'], ['Alkansya', '🫙'],
 ];
+function firstEmoji(text) {
+  const t = String(text || '').replace(/\s+/g, '');
+  if (!t) return '';
+  try {
+    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+      const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+      const first = seg.segment(t)[Symbol.iterator]().next().value;
+      if (first) return first.segment;
+    }
+  } catch {
+  }
+  return Array.from(t).slice(0, 2).join('');
+}
+
+function EmojiChooser({ value, onChange }) {
+  const theme = useTheme();
+  const [typed, setTyped] = useState('');
+  const custom = value && !EMOJIS.includes(value);
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        {custom ? (
+          <View style={{ width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.brandTint, borderWidth: 1.5, borderColor: theme.brand }}>
+            <Txt size={20}>{value}</Txt>
+          </View>
+        ) : null}
+        {EMOJIS.map((e) => (
+          <Pressable key={e} onPress={() => onChange(e)} style={{ width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: value === e ? theme.brandTint : theme.cardAlt, borderWidth: value === e ? 1.5 : 0, borderColor: theme.brand }}>
+            <Txt size={20}>{e}</Txt>
+          </Pressable>
+        ))}
+      </View>
+      <Field
+        placeholder="Or type / paste any emoji 😊"
+        value={typed}
+        onChangeText={(t) => {
+          const e = firstEmoji(t);
+          setTyped(e);
+          if (e) onChange(e);
+        }}
+        style={{ marginTop: 10 }}
+        maxLength={16}
+        autoCorrect={false}
+      />
+    </View>
+  );
+}
+
 const EMOJIS = ['🏦', '💳', '🧡', '🩵', '💜', '💚', '🔵', '🔴', '🟠', '🌊', '🐷', '🫙', '🪙', '💰', '📱', '✨'];
 
 export default function Wallets() {
@@ -27,6 +75,7 @@ export default function Wallets() {
   const [adding, setAdding] = useState(false);
   const [nw, setNw] = useState({ label: '', emoji: '🏦', amount: '' });
   const [rename, setRename] = useState('');
+  const [reEmoji, setReEmoji] = useState('');
 
   const { data } = useQuery(async (d) => {
     const [wallets, transfers] = await Promise.all([getWallets(d), listTransfers(d)]);
@@ -39,16 +88,19 @@ export default function Wallets() {
   const openEdit = (w) => {
     setEdit(w);
     setRename(w.label);
+    setReEmoji(w.emoji);
     setValue(w.balance > 0 ? centavosToInput(w.balance) : '');
   };
 
   const saveBalance = async () => {
-    if (edit.custom && rename.trim() && rename.trim() !== edit.label) await renameCustomWallet(db, edit.key, { label: rename });
+    if (edit.custom && ((rename.trim() && rename.trim() !== edit.label) || (reEmoji && reEmoji !== edit.emoji))) {
+      await renameCustomWallet(db, edit.key, { label: rename.trim() || edit.label, emoji: reEmoji || edit.emoji });
+    }
     await setWalletBalance(db, edit.key, toCentavos(value));
     tap('success');
     setEdit(null);
     bump();
-    toast(`${edit.emoji} ${edit.label} set to ${peso(toCentavos(value))}`);
+    toast(`${edit.custom ? reEmoji || edit.emoji : edit.emoji} ${edit.custom ? rename.trim() || edit.label : edit.label} saved ✓`);
   };
 
   const saveNew = async () => {
@@ -187,7 +239,12 @@ export default function Wallets() {
 
       <Sheet visible={!!edit} onClose={() => setEdit(null)} title={edit ? `${edit.emoji} ${edit.label}` : ''}>
         {edit?.custom ? (
-          <Field label="Name" value={rename} onChangeText={setRename} maxLength={24} style={{ marginBottom: 14 }} />
+          <>
+            <Field label="Name" value={rename} onChangeText={setRename} maxLength={24} />
+            <Txt w={800} size={13} color="sub" style={{ marginTop: 14, marginBottom: 8 }}>Icon</Txt>
+            <EmojiChooser value={reEmoji} onChange={setReEmoji} />
+            <View style={{ height: 14 }} />
+          </>
         ) : null}
         <Txt size={14} color="sub">How much is in it right now? Check your app or wallet.</Txt>
         <Field
@@ -215,13 +272,7 @@ export default function Wallets() {
           ))}
         </View>
         <Txt w={800} size={13} color="sub" style={{ marginTop: 14, marginBottom: 8 }}>Icon</Txt>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          {EMOJIS.map((e) => (
-            <Pressable key={e} onPress={() => setNw({ ...nw, emoji: e })} style={{ width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: nw.emoji === e ? theme.brandTint : theme.cardAlt, borderWidth: nw.emoji === e ? 1.5 : 0, borderColor: theme.brand }}>
-              <Txt size={20}>{e}</Txt>
-            </Pressable>
-          ))}
-        </View>
+        <EmojiChooser value={nw.emoji} onChange={(e) => setNw((x) => ({ ...x, emoji: e }))} />
         <Field
           label="How much is in it now? (optional)"
           value={nw.amount}
