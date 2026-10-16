@@ -9,6 +9,7 @@ import { swatch, swatchNames, useTheme } from '../lib/theme';
 import { Button, Card, Chip, EmptyState, Field, IconButton, ProgressBar, Row, Screen, Sheet, Title, Txt, tap } from '../components/ui';
 import { CalendarSheet } from '../components/bits';
 import { Ring, goalHint } from '../components/goals';
+import { goBack } from '../lib/nav';
 
 const GOAL_EMOJIS = ['🐷', '📱', '💻', '✈️', '🏝️', '🎧', '👟', '🎓', '🚗', '🏠', '🎁', '💍', '🎮', '📷', '🛵', '🆘'];
 const IDEAS = [
@@ -44,7 +45,7 @@ export default function Goals() {
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between', marginBottom: 10 }}>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <IconButton icon="add" tint="brand" color="onBrand" onPress={() => setSheet(true)} label="New goal" />
       </Row>
       <Title main="ipon" italic="goals" sub={goals.length ? `${peso(totalSaved)} saved so far. Proud of you 🥹` : 'Small ipon, big dreams.'} />

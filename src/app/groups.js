@@ -7,6 +7,7 @@ import { useData, useQuery } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { Avatar, Card, EmptyState, IconButton, Row, Screen, Title, Txt } from '../components/ui';
 import { GroupSheet } from '../components/barkada';
+import { goBack } from '../lib/nav';
 
 export default function Groups() {
   const theme = useTheme();
@@ -32,7 +33,7 @@ export default function Groups() {
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <IconButton icon="add" onPress={() => setSheet(true)} label="New barkada" />
       </Row>
       <Title main="your" italic="barkadas" sub="Groups for hati-hati and checking who owes what." />

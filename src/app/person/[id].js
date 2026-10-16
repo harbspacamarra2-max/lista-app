@@ -25,6 +25,7 @@ import { radius, useTheme } from '../../lib/theme';
 import { Avatar, Badge, Button, Card, Field, IconButton, ProgressBar, Row, Screen, SectionHeader, Sheet, Txt, tap } from '../../components/ui';
 import { DebtStatus, WalletPicker } from '../../components/bits';
 import { Celebrate } from '../../components/celebrate';
+import { goBack } from '../../lib/nav';
 
 export default function PersonScreen() {
   const theme = useTheme();
@@ -55,7 +56,7 @@ export default function PersonScreen() {
   if (data && !data.person) {
     return (
       <Screen>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <Txt w={800} size={18} style={{ marginTop: 20 }}>This person was removed.</Txt>
       </Screen>
     );
@@ -143,7 +144,7 @@ export default function PersonScreen() {
         onPress: async () => {
           for (const d of debts) if (d.reminder_id) await cancelReminder(d.reminder_id);
           await undoDelete('person', personId, `${person.name} deleted 🗑️`, () => deletePerson(db, personId));
-          router.back();
+          goBack();
         },
       },
     ]);
@@ -165,7 +166,7 @@ export default function PersonScreen() {
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between' }}>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <Row gap={8}>
           <IconButton
             icon="create-outline"

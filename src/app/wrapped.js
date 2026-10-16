@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, Share, Text, View, useWindowDimensions } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +12,7 @@ import { useSettings } from '../lib/store';
 import { fonts } from '../lib/theme';
 import { buildSlides, hasWrapped, shareText, summaryLines } from '../lib/wrapped';
 import { tap } from '../components/ui';
+import { goBack } from '../lib/nav';
 
 const DURATION = 7000;
 const native = Platform.OS !== 'web';
@@ -50,7 +51,7 @@ export default function Wrapped() {
     setIndex((i) => Math.max(0, Math.min(slides.length - 1, i + dir)));
   };
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  const close = () => (goBack());
 
   const share = async () => {
     tap('medium');

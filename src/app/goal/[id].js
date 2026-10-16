@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { addGoalEntry, deleteGoal, deleteGoalEntry, getGoal, listGoalEntries } from '../../lib/db';
 import { cleanAmountInput, peso, prettyDate, shortDate, toCentavos } from '../../lib/format';
@@ -11,6 +11,7 @@ import { Button, Card, Chip, Field, IconButton, Row, Screen, SectionHeader, Segm
 import { Ring, goalHint } from '../../components/goals';
 import { Celebrate } from '../../components/celebrate';
 import { WalletPicker } from '../../components/bits';
+import { goBack } from '../../lib/nav';
 
 export default function GoalScreen() {
   const theme = useTheme();
@@ -33,7 +34,7 @@ export default function GoalScreen() {
   if (data && !data.goal) {
     return (
       <Screen>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <Txt w={800} size={18} style={{ marginTop: 20 }}>This goal was removed.</Txt>
       </Screen>
     );
@@ -68,7 +69,7 @@ export default function GoalScreen() {
         onPress: async () => {
           await deleteGoal(db, goalId);
           bump();
-          router.back();
+          goBack();
         },
       },
     ]);
@@ -97,7 +98,7 @@ export default function GoalScreen() {
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between' }}>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <IconButton icon="trash-outline" tint="redTint" color="red" onPress={remove} label="Delete goal" />
       </Row>
 

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { router } from 'expo-router';
 import { useData, useSettings } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { Alert } from '../lib/alert';
 import { FEEDBACK_KINDS, RATINGS, isDeveloper, listFeedback, removeFeedback, sendFeedback, setFeedbackDone } from '../lib/feedback';
 import { Button, Card, Chip, EmptyState, Field, IconButton, Row, Screen, Segmented, Txt, tap } from '../components/ui';
+import { goBack } from '../lib/nav';
 
 export default function Feedback() {
   const theme = useTheme();
@@ -42,7 +42,7 @@ export default function Feedback() {
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <Txt w={800} size={18}>Feedback</Txt>
         <View style={{ width: 44 }} />
       </Row>
@@ -69,7 +69,7 @@ export default function Feedback() {
             Got your message. Every bit of feedback helps make Sinop better for everyone. 💚
           </Txt>
           <Button title="Send another" variant="soft" size="md" style={{ marginTop: 18 }} onPress={() => setSent(false)} />
-          <Button title="Back to Sinop" variant="ghost" size="md" style={{ marginTop: 10 }} onPress={() => router.back()} />
+          <Button title="Back to Sinop" variant="ghost" size="md" style={{ marginTop: 10 }} onPress={() => goBack()} />
         </Card>
       ) : (
         <>

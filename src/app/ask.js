@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +13,7 @@ import { fonts, radius, useTheme } from '../lib/theme';
 import { Aura, Button, Card, IconButton, Row, Txt, tap } from '../components/ui';
 import { ActionReview } from '../components/smart';
 import { HARBEY_HELLO, HARBEY_PERSONA, HARBEY_STARTERS, isHanna } from '../lib/love';
+import { goBack } from '../lib/nav';
 
 const STARTERS = [
   'Magkano nagastos ko this week?',
@@ -110,7 +110,7 @@ export default function Ask() {
       <Aura height={320} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Row style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 8 }} gap={12}>
-          <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+          <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
           <View style={{ flex: 1 }}>
             {her ? (
               <Txt>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { fonts, radius, useTheme } from '../lib/theme';
 import { Alert } from '../lib/alert';
 import { Aura, Avatar, Button, Chip, Field, IconButton, Row, Segmented, Txt, tap } from '../components/ui';
 import { AmountInput, CalendarSheet, WalletPicker } from '../components/bits';
+import { goBack } from '../lib/nav';
 
 export default function Split() {
   const theme = useTheme();
@@ -112,7 +113,7 @@ export default function Split() {
       }
       tap('success');
       bump();
-      router.back();
+      goBack();
       setTimeout(() => toast(`Hati-hati done! 🍕 ${created.length} ${created.length === 1 ? 'utang' : 'utangs'} added. Maningil ka ha 😤`), 300);
     } catch (e) {
       setSaving(false);
@@ -130,7 +131,7 @@ export default function Split() {
       <Aura height={360} />
       <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 20 }}>
         <Row style={{ justifyContent: 'space-between' }}>
-          <IconButton icon="close" onPress={() => router.back()} label="Close" />
+          <IconButton icon="close" onPress={() => goBack()} label="Close" />
           <Txt w={800} size={17}>Hati-hati 🍕</Txt>
           <View style={{ width: 44 }} />
         </Row>

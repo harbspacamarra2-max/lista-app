@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { PAYMENT_METHODS, addTransfer, deleteTransfer, getWallets, listTransfers, setWalletBalance } from '../lib/db';
 import { centavosToInput, cleanAmountInput, peso, prettyDate, toCentavos, today } from '../lib/format';
@@ -8,6 +7,7 @@ import { useData, useQuery } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { Alert } from '../lib/alert';
 import { Button, Card, Chip, Field, GradientCard, IconButton, Row, Screen, SectionHeader, Sheet, Title, Txt, tap } from '../components/ui';
+import { goBack } from '../lib/nav';
 
 export default function Wallets() {
   const theme = useTheme();
@@ -71,7 +71,7 @@ export default function Wallets() {
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
       </Row>
       <Title main="your" italic="wallets" sub="Cash, GCash, Maya, cards. Lahat ng pera mo, isang tingin lang." />
 

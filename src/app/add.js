@@ -31,6 +31,7 @@ import { QUIPS, fill, pick } from '../lib/quips';
 import { radius, useTheme } from '../lib/theme';
 import { Aura, Button, Chip, Field, IconButton, Row, Segmented, Txt, tap } from '../components/ui';
 import { AmountInput, CalendarSheet, WalletPicker } from '../components/bits';
+import { goBack } from '../lib/nav';
 
 export default function Add() {
   const theme = useTheme();
@@ -197,7 +198,7 @@ export default function Add() {
       }
       tap('success');
       bump();
-      router.back();
+      goBack();
       if (!editing) {
         let line;
         if (isUtang) line = fill(pick(direction === 'owed' ? 'savedOwed' : 'savedOwe'), { name: personName.trim() });
@@ -224,7 +225,7 @@ export default function Add() {
       if (oldReminder) await cancelReminder(oldReminder);
       await undoDelete('debt', editDebtId, 'Utang deleted 🗑️', () => deleteDebt(db, editDebtId));
     }
-    router.back();
+    goBack();
   };
 
   const typeOptions = editDebtId
@@ -247,7 +248,7 @@ export default function Add() {
       <Aura height={360} />
       <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 20 }}>
         <Row style={{ justifyContent: 'space-between' }}>
-          <IconButton icon="close" onPress={() => router.back()} label="Close" />
+          <IconButton icon="close" onPress={() => goBack()} label="Close" />
           <Txt w={800} size={17}>{title}</Txt>
           {editing ? (
             <IconButton icon="trash-outline" tint="redTint" color="red" onPress={remove} label="Delete" />

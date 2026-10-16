@@ -18,6 +18,7 @@ import { prettyDate, today } from '../lib/format';
 import { currentVersion } from '../lib/updates';
 import { aiReady, hasAiKey } from '../lib/ai';
 import { isDeveloper } from '../lib/feedback';
+import { goBack } from '../lib/nav';
 
 const EMOJI_CHOICES = ['☕', '🍔', '🧋', '🍕', '🚗', '⛽', '🏠', '👕', '💄', '🐶', '🎬', '🎵', '🎓', '✈️', '🏋️', '🎁', '🧾', '💻', '📦', '🙏'];
 
@@ -172,7 +173,7 @@ export default function Settings() {
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between', marginBottom: 18 }}>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <Txt w={800} size={18}>Settings</Txt>
         <View style={{ width: 44 }} />
       </Row>

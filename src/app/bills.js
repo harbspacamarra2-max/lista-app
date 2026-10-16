@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
-import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import {
   PAYMENT_METHODS,
@@ -19,6 +18,7 @@ import { radius, useTheme } from '../lib/theme';
 import { Alert } from '../lib/alert';
 import { Avatar, Badge, Button, Card, Chip, EmptyState, Field, IconButton, Row, Screen, Segmented, Sheet, Title, Txt, tap } from '../components/ui';
 import { CalendarSheet } from '../components/bits';
+import { goBack } from '../lib/nav';
 
 const PRESETS = [
   ['Netflix', '🎬', 'Fun'],
@@ -121,7 +121,7 @@ export default function Bills() {
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between', marginBottom: 10 }}>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <IconButton icon="add" tint="brand" color="onBrand" onPress={() => openNew(null)} label="New bill" />
       </Row>
       <Title main="bills &" italic="subs" sub={bills.length ? `About ${peso(Math.round(monthly / 100) * 100)} a month on autopilot 🔁` : 'Never miss a due date again.'} />

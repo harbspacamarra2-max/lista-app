@@ -9,6 +9,7 @@ import { useData, useQuery } from '../../lib/store';
 import { useTheme } from '../../lib/theme';
 import { Avatar, Button, Card, IconButton, Row, Screen, SectionHeader, Txt } from '../../components/ui';
 import { GroupSheet } from '../../components/barkada';
+import { goBack } from '../../lib/nav';
 
 export default function GroupScreen() {
   const theme = useTheme();
@@ -33,7 +34,7 @@ export default function GroupScreen() {
   if (data && !data.group) {
     return (
       <Screen>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <Txt w={800} size={18} style={{ marginTop: 20 }}>This barkada was removed.</Txt>
       </Screen>
     );
@@ -63,7 +64,7 @@ export default function GroupScreen() {
         onPress: async () => {
           await deleteGroup(db, gid);
           bump();
-          router.back();
+          goBack();
         },
       },
     ]);
@@ -74,7 +75,7 @@ export default function GroupScreen() {
   return (
     <Screen>
       <Row style={{ justifyContent: 'space-between' }}>
-        <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
+        <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
         <Row gap={8}>
           <IconButton icon="create-outline" onPress={() => setEditing(true)} label="Edit" />
           <IconButton icon="trash-outline" tint="redTint" color="red" onPress={remove} label="Delete" />
