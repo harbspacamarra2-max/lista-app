@@ -28,6 +28,7 @@ import { Avatar, Badge, Card, EmptyState, GradientCard, IconButton, ProgressBar,
 import { StatPill, TransactionRow } from '../../components/bits';
 import { GoalMini } from '../../components/goals';
 import { useSmartLog } from '../../components/smart';
+import { isHanna } from '../../lib/love';
 
 const addDaysIso = (n) => addDays(today(), n);
 
@@ -37,7 +38,7 @@ export default function Home() {
   const [tip, setTip] = useState(() => pick('homeTip'));
   useFocusEffect(useCallback(() => setTip(pick('homeTip')), []));
   const sqlite = useSQLiteContext();
-  const { bump, toast } = useData();
+  const { bump, toast, cloud } = useData();
   const [quick, setQuick] = useState('');
   const smart = useSmartLog();
   const aiOn = aiReady(settings);
@@ -192,8 +193,8 @@ export default function Home() {
           transform: [{ scale: pressed ? 0.98 : 1 }],
         })}
       >
-        <Txt size={17}>💬</Txt>
-        <Txt w={700} size={14} color={theme.lilacInk} style={{ flex: 1 }} numberOfLines={1}>Ask Sinop: “Saan napunta pera ko?”</Txt>
+        <Txt size={17}>{isHanna(cloud?.user) ? '💚' : '💬'}</Txt>
+        <Txt w={700} size={14} color={theme.lilacInk} style={{ flex: 1 }} numberOfLines={1}>{isHanna(cloud?.user) ? 'Chat with Harbey, Love 💚' : 'Ask Sinop: “Saan napunta pera ko?”'}</Txt>
         <Ionicons name="chevron-forward" size={18} color={theme.lilacInk} />
       </Pressable>
 

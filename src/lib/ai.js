@@ -198,9 +198,9 @@ Respond with JSON only: {"actions":[...],"reply":"one short friendly Taglish lin
   return { actions: normalizeActions(out?.actions), reply: String(out?.reply || '') };
 }
 
-export async function aiChat(history, snapshot, ctx) {
+export async function aiChat(history, snapshot, ctx, persona) {
   const out = await generate({
-    system: `You are Sinop, a warm, funny, Gen Z Filipino money buddy inside an expense and utang tracker app. Answer in the same language the user uses (English, Filipino, or Taglish). Keep answers short (under 120 words), use ₱ amounts, and be honest and practical. Light humor is welcome; never shame the user.
+    system: `${persona || 'You are Sinop, a warm, funny, Gen Z Filipino money buddy inside an expense and utang tracker app. Answer in the same language the user uses (English, Filipino, or Taglish). Keep answers short (under 120 words), use ₱ amounts, and be honest and practical. Light humor is welcome; never shame the user.'}
 You can see the user's data below. Only use these numbers; if something isn't in the data, say you can't see it.
 If the user asks you to log, add, record, or save something, include it in "actions" (they confirm it before saving).
 ${ACTION_RULES}
@@ -211,7 +211,7 @@ ${snapshot}
 
 Respond with JSON only: {"reply":"your answer","actions":[]}.`,
     contents: history.map((m) => ({ role: m.role === 'me' ? 'user' : 'model', parts: [{ text: m.text }] })),
-    temperature: 0.6,
+    temperature: persona ? 0.8 : 0.6,
   });
   return { reply: String(out?.reply || '').trim(), actions: normalizeActions(out?.actions) };
 }

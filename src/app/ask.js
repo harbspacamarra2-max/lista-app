@@ -13,6 +13,7 @@ import { useData, useSettings } from '../lib/store';
 import { fonts, radius, useTheme } from '../lib/theme';
 import { Aura, Button, Card, IconButton, Row, Txt, tap } from '../components/ui';
 import { ActionReview } from '../components/smart';
+import { HARBEY_HELLO, HARBEY_PERSONA, HARBEY_STARTERS, isHanna } from '../lib/love';
 
 const STARTERS = [
   'Magkano nagastos ko this week?',
@@ -36,8 +37,10 @@ export default function Ask() {
   const db = useSQLiteContext();
   const insets = useSafeAreaInsets();
   const settings = useSettings();
-  const { bump, refreshSettings, toast } = useData();
-  const [hello] = useState(() => HELLO[Math.floor(Math.random() * HELLO.length)]);
+  const { bump, refreshSettings, toast, cloud } = useData();
+  const her = isHanna(cloud?.user);
+  const [seed] = useState(() => Math.floor(Math.random() * 1000));
+  const hello = her ? HARBEY_HELLO[seed % HARBEY_HELLO.length] : HELLO[seed % HELLO.length];
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -57,7 +60,7 @@ export default function Ask() {
     scrollDown();
     try {
       const [snapshot, categories, people] = await Promise.all([buildSnapshot(db, settings), listCategories(db), listPeople(db)]);
-      const { reply, actions } = await aiChat(history.slice(-12), snapshot, { categories, people });
+      const { reply, actions } = await aiChat(history.slice(-12), snapshot, { categories, people }, her ? HARBEY_PERSONA : null);
       setMsgs((m) => [...m, { role: 'ai', text: reply || 'Hmm, wala akong masabi diyan 😅', actions: actions.map((a) => ({ a, state: 'new' })), categories }]);
     } catch (e) {
       setMsgs((m) => [...m, { role: 'ai', text: friendlyAiError(e), error: true }]);
@@ -109,10 +112,17 @@ export default function Ask() {
         <Row style={{ paddingTop: insets.top + 12, paddingHorizontal: 20, paddingBottom: 8 }} gap={12}>
           <IconButton icon="chevron-back" onPress={() => router.back()} label="Back" />
           <View style={{ flex: 1 }}>
-            <Txt>
-              <Txt serif size={34}>ask </Txt>
-              <Txt serif="italic" size={34} color="brand">sinop</Txt>
-            </Txt>
+            {her ? (
+              <Txt>
+                <Txt serif="italic" size={34} color="brand">harbey </Txt>
+                <Txt size={26}>💚</Txt>
+              </Txt>
+            ) : (
+              <Txt>
+                <Txt serif size={34}>ask </Txt>
+                <Txt serif="italic" size={34} color="brand">sinop</Txt>
+              </Txt>
+            )}
           </View>
           {msgs.length ? <IconButton icon="refresh" onPress={() => setMsgs([])} label="New chat" /> : null}
         </Row>
@@ -176,7 +186,7 @@ export default function Ask() {
               ) : null}
               {!msgs.length ? (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
-                  {STARTERS.map((s) => (
+                  {(her ? HARBEY_STARTERS : STARTERS).map((s) => (
                     <Pressable
                       key={s}
                       onPress={() => send(s)}
@@ -218,7 +228,7 @@ export default function Ask() {
                 value={text}
                 onChangeText={setText}
                 onSubmitEditing={() => send()}
-                placeholder="Ask or tell me what to log…"
+                placeholder={her ? "Chika mo na, Love 💚" : "Ask or tell me what to log…"}
                 placeholderTextColor={theme.faint}
                 returnKeyType="send"
                 multiline
