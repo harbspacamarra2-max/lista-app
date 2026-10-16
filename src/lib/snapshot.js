@@ -18,6 +18,7 @@ export async function buildSnapshot(db, settings = {}, month = monthKey()) {
   const lines = [];
   lines.push(`Name: ${settings.name || 'unknown'}. Monthly budget: ${Number(settings.budget || 0) ? peso(Number(settings.budget)) : 'not set'}.`);
   lines.push(`Today (${today()}): spent ${peso(overview.spentToday)}. This week: ${peso(overview.spentWeek)}.`);
+  lines.push(`Budget used this month: ${peso(overview.usedMonth ?? overview.spentMonth)} (expenses ${peso(overview.spentMonth)}, lent out and not yet paid back ${peso(overview.lentMonth || 0)}, put into ipon ${peso(overview.savedMonth || 0)}, transfer fees ${peso(overview.feesMonth || 0)}).`);
   lines.push(`${monthLabel(month)}: spent ${peso(report.spent)}, income ${peso(report.income)}. ${monthLabel(prev)}: spent ${peso(prevReport.spent)}.`);
   if (report.byCategory.length) {
     lines.push(`By category (${monthLabel(month)}): ${report.byCategory.map((c) => `${c.name} ${peso(c.total)} (${c.count}x)`).join('; ')}.`);

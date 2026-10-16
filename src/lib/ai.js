@@ -101,11 +101,11 @@ const ACTION_RULES = `Return actions as JSON objects. Amounts are in Philippine 
 Action types:
 - {"type":"expense","amount":120,"category":"<one of the expense categories>","method":"cash|gcash|maya|card|bank","date":"YYYY-MM-DD","note":"short label"}
 - {"type":"income","amount":5000,"category":"<one of the income categories>","method":"cash|gcash|maya|card|bank","date":"YYYY-MM-DD","note":"short label"}
-- {"type":"debt","direction":"owed|owe","person":"Name","amount":350,"reason":"short reason or empty","date":"YYYY-MM-DD","dueDate":"YYYY-MM-DD or null"}
+- {"type":"debt","direction":"owed|owe","person":"Name","amount":350,"reason":"short reason or empty","method":"cash|gcash|maya|card|bank","date":"YYYY-MM-DD","dueDate":"YYYY-MM-DD or null"}
   "owed" = the other person borrowed from the user (they owe the user). "owe" = the user borrowed (the user owes them).
-- {"type":"payment","direction":"owed|owe","person":"Name","amount":200 or null for full}
+- {"type":"payment","direction":"owed|owe","person":"Name","amount":200 or null for full,"method":"cash|gcash|maya|card|bank or null if not said"}
   "owed" = the person paid the user back. "owe" = the user paid the person back.
-- {"type":"split","total":900,"people":["Ana","Ben"],"includeMe":true,"reason":"Samgyup","category":"Food","dueDate":null}
+- {"type":"split","total":900,"people":["Ana","Ben"],"includeMe":true,"reason":"Samgyup","category":"Food","method":"cash|gcash|maya|card|bank","dueDate":null}
   A bill split equally; the listed people each owe the user their share. includeMe false if the user is not part of the split.
 - {"type":"transfer","from":"cash|gcash|maya|card|bank","to":"cash|gcash|maya|card|bank","amount":500,"fee":15 or 0,"note":"short"}
   Moving the user's own money between wallets: "cash in GCash 500" = cash to gcash, "cash out 1000 sa GCash" = gcash to cash, "withdraw sa ATM" = bank to cash. Not an expense.
@@ -142,9 +142,9 @@ export function normalizeActions(list) {
         case 'income':
           return { type: a.type, amount: toCentavos(a.amount), category: a.category || null, method, date, note: String(a.note || '').slice(0, 60) };
         case 'debt':
-          return { type: 'debt', direction: a.direction === 'owe' ? 'owe' : 'owed', person: String(a.person || '').trim(), amount: toCentavos(a.amount), reason: String(a.reason || '').slice(0, 80), date, dueDate };
+          return { type: 'debt', direction: a.direction === 'owe' ? 'owe' : 'owed', person: String(a.person || '').trim(), amount: toCentavos(a.amount), reason: String(a.reason || '').slice(0, 80), method, date, dueDate };
         case 'payment':
-          return { type: 'payment', direction: a.direction === 'owe' ? 'owe' : 'owed', person: String(a.person || '').trim(), amount: toCentavos(a.amount), date };
+          return { type: 'payment', direction: a.direction === 'owe' ? 'owe' : 'owed', person: String(a.person || '').trim(), amount: toCentavos(a.amount), method: ['cash', 'gcash', 'maya', 'card', 'bank'].includes(String(a.method || '').toLowerCase()) ? String(a.method).toLowerCase() : undefined, date };
         case 'transfer':
           return {
             type: 'transfer',
@@ -163,6 +163,7 @@ export function normalizeActions(list) {
             includeMe: a.includeMe !== false,
             reason: String(a.reason || '').slice(0, 60),
             category: a.category || 'Food',
+            method,
             date,
             dueDate,
           };

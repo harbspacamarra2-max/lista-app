@@ -7,7 +7,7 @@ function pesoText(centavos) {
 
 export function SinopWidget({ data }) {
   const d = data || {};
-  const left = d.budget ? d.budget - (d.spentMonth || 0) : null;
+  const left = d.budget ? d.budget - (d.usedMonth ?? d.spentMonth ?? 0) : null;
   const sub = d.budget
     ? left >= 0
       ? `${pesoText(left)} left this month`

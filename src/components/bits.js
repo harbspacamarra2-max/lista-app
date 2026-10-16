@@ -15,8 +15,8 @@ import {
   shiftMonth,
   today,
 } from '../lib/format';
-import { methodLabel } from '../lib/db';
-import { Avatar, Badge, IconButton, Row, Sheet, Txt, tap } from './ui';
+import { PAYMENT_METHODS, methodLabel } from '../lib/db';
+import { Avatar, Badge, Chip, IconButton, Row, Sheet, Txt, tap } from './ui';
 
 export function TransactionRow({ tx, onPress, onLongPress, showDate }) {
   const theme = useTheme();
@@ -325,5 +325,19 @@ export function NavRow({ icon, label, value, onPress, danger }) {
       {value ? <Txt w={600} size={14} color="sub">{value}</Txt> : null}
       <Ionicons name="chevron-forward" size={18} color={theme.faint} />
     </Pressable>
+  );
+}
+
+export function WalletPicker({ value, onChange, noneLabel = 'Not from my wallet', hint }) {
+  return (
+    <View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {PAYMENT_METHODS.map((m) => (
+          <Chip key={m.key} label={m.label} emoji={m.emoji} small selected={value === m.key} onPress={() => onChange(m.key)} />
+        ))}
+        <Chip label={noneLabel} emoji="🚫" small selected={!value || value === 'none'} onPress={() => onChange('none')} />
+      </View>
+      {hint ? <Txt size={12} color="faint" style={{ marginTop: 6, marginLeft: 4, lineHeight: 17 }}>{hint}</Txt> : null}
+    </View>
   );
 }

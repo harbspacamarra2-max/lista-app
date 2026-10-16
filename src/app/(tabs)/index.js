@@ -89,8 +89,14 @@ export default function Home() {
   const budget = Number(settings.budget || 0);
   const o = data?.overview || { spentToday: 0, spentWeek: 0, spentMonth: 0, incomeMonth: 0 };
   const u = data?.utang || { totalOwe: 0, totalOwed: 0, dueSoon: [] };
-  const left = budget - o.spentMonth;
-  const used = budget ? o.spentMonth / budget : 0;
+  const usedAmt = o.usedMonth ?? o.spentMonth;
+  const left = budget - usedAmt;
+  const used = budget ? usedAmt / budget : 0;
+  const outParts = [
+    o.lentMonth ? `${peso(o.lentMonth)} lent out` : '',
+    o.savedMonth ? `${peso(o.savedMonth)} to ipon` : '',
+    o.feesMonth ? `${peso(o.feesMonth)} fees` : '',
+  ].filter(Boolean);
   const month = monthName(monthKey());
 
   return (
@@ -225,8 +231,13 @@ export default function Home() {
                 ? `Budget? Never heard of her. 💅 Over by ${peso(-left)}`
                 : used >= 0.9
                   ? `Hinay-hinay, bestie 😭 ${Math.round(used * 100)}% used`
-                  : `${peso(o.spentMonth)} of ${peso(budget)} used · ${Math.round(used * 100)}%`}
+                  : `${peso(usedAmt)} of ${peso(budget)} used · ${Math.round(used * 100)}%`}
             </Txt>
+            {outParts.length ? (
+              <Txt w={600} size={12} color={theme.onBrand} style={{ marginTop: 3, opacity: 0.8 }}>
+                Includes {outParts.join(', ')}
+              </Txt>
+            ) : null}
           </View>
         ) : (
           <Pressable onPress={() => router.push('/settings')}>

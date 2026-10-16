@@ -10,6 +10,7 @@ import { Alert } from '../../lib/alert';
 import { Button, Card, Chip, Field, IconButton, Row, Screen, SectionHeader, Segmented, Sheet, Txt, tap } from '../../components/ui';
 import { Ring, goalHint } from '../../components/goals';
 import { Celebrate } from '../../components/celebrate';
+import { WalletPicker } from '../../components/bits';
 
 export default function GoalScreen() {
   const theme = useTheme();
@@ -21,6 +22,7 @@ export default function GoalScreen() {
   const [mode, setMode] = useState('add');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [wallet, setWallet] = useState('cash');
   const [party, setParty] = useState(false);
 
   const { data } = useQuery(async (d) => {
@@ -47,7 +49,7 @@ export default function GoalScreen() {
     const cents = toCentavos(amount);
     if (!cents) return;
     const signed = mode === 'add' ? cents : -Math.min(cents, g.saved);
-    await addGoalEntry(db, { goalId, amount: signed, note: note.trim() });
+    await addGoalEntry(db, { goalId, amount: signed, note: note.trim(), method: wallet === 'none' ? null : wallet });
     tap('success');
     const reached = mode === 'add' && g.saved < g.target && g.saved + cents >= g.target;
     setSheet(false);
@@ -171,6 +173,13 @@ export default function GoalScreen() {
           </Row>
         ) : null}
         <Field placeholder="Note (optional)" value={note} onChangeText={setNote} style={{ marginTop: 10 }} maxLength={40} />
+        <Txt w={800} size={13} color="sub" style={{ marginTop: 16, marginBottom: 8 }}>{mode === 'add' ? 'Taken from' : 'Put back into'}</Txt>
+        <WalletPicker
+          value={wallet}
+          onChange={setWallet}
+          noneLabel="Not from my wallet"
+          hint={wallet === 'none' ? 'Your wallet and budget won’t change.' : mode === 'add' ? 'Moves it out of your wallet and counts it in this month’s budget.' : 'Adds it back to your wallet.'}
+        />
         <Button title={mode === 'add' ? 'Save to ipon' : 'Withdraw'} style={{ marginTop: 16 }} onPress={save} disabled={!toCentavos(amount)} />
       </Sheet>
 

@@ -11,7 +11,7 @@ import { useData } from '../lib/store';
 import { fonts, radius, useTheme } from '../lib/theme';
 import { Alert } from '../lib/alert';
 import { Aura, Avatar, Button, Chip, Field, IconButton, Row, Segmented, Txt, tap } from '../components/ui';
-import { AmountInput, CalendarSheet } from '../components/bits';
+import { AmountInput, CalendarSheet, WalletPicker } from '../components/bits';
 
 export default function Split() {
   const theme = useTheme();
@@ -31,6 +31,7 @@ export default function Split() {
   const [categories, setCategories] = useState([]);
   const [categoryId, setCategoryId] = useState(null);
   const [dueDate, setDueDate] = useState(null);
+  const [paidWith, setPaidWith] = useState('cash');
   const [picker, setPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [groups, setGroups] = useState([]);
@@ -100,7 +101,8 @@ export default function Split() {
         date: today(),
         dueDate,
         shares: shares.friends,
-        myShare: includeMe && logMine ? { amount: shares.mine, categoryId } : null,
+        myShare: includeMe && logMine ? { amount: shares.mine, categoryId, method: paidWith === 'none' ? 'cash' : paidWith } : null,
+        paidWith: paidWith === 'none' ? null : paidWith,
       });
       if (dueDate) {
         for (const c of created) {
@@ -236,6 +238,14 @@ export default function Split() {
             ) : null}
           </>
         ) : null}
+
+        <Label>I paid the bill with</Label>
+        <WalletPicker
+          value={paidWith}
+          onChange={setPaidWith}
+          noneLabel="Not from my wallet"
+          hint={paidWith === 'none' ? 'Only your own share is logged. Friends’ shares won’t touch your wallet.' : 'The whole bill comes out of your wallet. Their shares come back when they pay you.'}
+        />
 
         <Label>Pay me back by</Label>
         <Row gap={8} style={{ flexWrap: 'wrap' }}>

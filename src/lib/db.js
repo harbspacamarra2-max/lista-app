@@ -130,6 +130,8 @@ export async function migrate(db) {
   await addCol('debts', 'interest', 'interest REAL NOT NULL DEFAULT 0');
   await addCol('debts', 'plan_count', 'plan_count INTEGER NOT NULL DEFAULT 0');
   await addCol('debts', 'plan_freq', "plan_freq TEXT NOT NULL DEFAULT 'monthly'");
+  await addCol('debts', 'method', 'method TEXT');
+  await addCol('debt_payments', 'method', 'method TEXT');
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS wallets (key TEXT PRIMARY KEY NOT NULL, start INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS transfers (
@@ -153,6 +155,7 @@ export async function migrate(db) {
       PRIMARY KEY (group_id, person_id)
     );
   `);
+  await addCol('goal_entries', 'method', 'method TEXT');
   const cols = await db.getAllAsync('PRAGMA table_info(categories)');
   if (!cols.some((c) => c.name === 'budget')) {
     await db.execAsync('ALTER TABLE categories ADD COLUMN budget INTEGER NOT NULL DEFAULT 0');
@@ -264,13 +267,27 @@ export async function getOverview(db) {
   const m = monthKey(t);
   const monthStart = `${m}-01`;
   const monthEnd = `${m}-31`;
-  const [spentToday, spentWeek, spentMonth, incomeMonth] = await Promise.all([
+  const [spentToday, spentWeek, spentMonth, incomeMonth, out] = await Promise.all([
     sumBetween(db, 'expense', t, t),
     sumBetween(db, 'expense', startOfWeek(t), t),
     sumBetween(db, 'expense', monthStart, monthEnd),
     sumBetween(db, 'income', monthStart, monthEnd),
+    moneyOut(db, monthStart, monthEnd),
   ]);
-  return { spentToday, spentWeek, spentMonth, incomeMonth };
+  return { spentToday, spentWeek, spentMonth, incomeMonth, ...out, usedMonth: spentMonth + out.outMonth };
+}
+
+export async function moneyOut(db, from, to) {
+  const one = (sql) => db.getFirstAsync(sql, from, to).then((r) => r?.total ?? 0);
+  const [lent, paidBack, saved, fees] = await Promise.all([
+    one("SELECT COALESCE(SUM(COALESCE(principal, amount)), 0) AS total FROM debts WHERE direction = 'owed' AND method IS NOT NULL AND date >= ? AND date <= ?"),
+    one("SELECT COALESCE(SUM(p.amount), 0) AS total FROM debt_payments p JOIN debts d ON d.id = p.debt_id WHERE d.direction = 'owed' AND p.method IS NOT NULL AND p.date >= ? AND p.date <= ?"),
+    one('SELECT COALESCE(SUM(amount), 0) AS total FROM goal_entries WHERE method IS NOT NULL AND date >= ? AND date <= ?'),
+    one('SELECT COALESCE(SUM(fee), 0) AS total FROM transfers WHERE date >= ? AND date <= ?'),
+  ]);
+  const lentMonth = Math.max(0, lent - paidBack);
+  const savedMonth = Math.max(0, saved);
+  return { lentMonth, savedMonth, feesMonth: fees, outMonth: lentMonth + savedMonth + fees };
 }
 
 export async function getMonthReport(db, month) {
@@ -423,20 +440,20 @@ export function withInterest(principal, rate) {
   return Math.round(principal * (1 + (Number(rate) || 0) / 100));
 }
 
-export async function saveDebt(db, { id, personId, personName, direction, amount, reason, date, due_date, interest = 0, plan_count = 0, plan_freq = 'monthly' }) {
+export async function saveDebt(db, { id, personId, personName, direction, amount, reason, date, due_date, interest = 0, plan_count = 0, plan_freq = 'monthly', method = null }) {
   const pid = personId || (await findOrCreatePerson(db, personName));
   const rate = Number(interest) || 0;
   const total = withInterest(amount, rate);
   if (id) {
     await db.runAsync(
-      'UPDATE debts SET person_id=?, direction=?, amount=?, principal=?, interest=?, plan_count=?, plan_freq=?, reason=?, date=?, due_date=? WHERE id=?',
-      pid, direction, total, amount, rate, plan_count || 0, plan_freq || 'monthly', reason || null, date, due_date || null, id
+      'UPDATE debts SET person_id=?, direction=?, amount=?, principal=?, interest=?, plan_count=?, plan_freq=?, reason=?, date=?, due_date=?, method=? WHERE id=?',
+      pid, direction, total, amount, rate, plan_count || 0, plan_freq || 'monthly', reason || null, date, due_date || null, method || null, id
     );
     return { id, personId: pid };
   }
   const r = await db.runAsync(
-    'INSERT INTO debts (person_id, direction, amount, principal, interest, plan_count, plan_freq, reason, date, due_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    pid, direction, total, amount, rate, plan_count || 0, plan_freq || 'monthly', reason || null, date, due_date || null
+    'INSERT INTO debts (person_id, direction, amount, principal, interest, plan_count, plan_freq, reason, date, due_date, method) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    pid, direction, total, amount, rate, plan_count || 0, plan_freq || 'monthly', reason || null, date, due_date || null, method || null
   );
   return { id: r.lastInsertRowId, personId: pid };
 }
@@ -450,10 +467,15 @@ export async function deleteDebt(db, id) {
   await db.runAsync('DELETE FROM debts WHERE id = ?', id);
 }
 
-export async function addPayment(db, { debtId, amount, date, note, photo }) {
+export async function addPayment(db, { debtId, amount, date, note, photo, method }) {
+  let m = method;
+  if (m === undefined) {
+    const d = await db.getFirstAsync('SELECT method FROM debts WHERE id = ?', debtId);
+    m = d?.method || null;
+  }
   await db.runAsync(
-    'INSERT INTO debt_payments (debt_id, amount, date, note, photo) VALUES (?, ?, ?, ?, ?)',
-    debtId, amount, date || today(), note || null, photo || null
+    'INSERT INTO debt_payments (debt_id, amount, date, note, photo, method) VALUES (?, ?, ?, ?, ?, ?)',
+    debtId, amount, date || today(), note || null, photo || null, m || null
   );
 }
 
@@ -587,10 +609,10 @@ export function listGoalEntries(db, goalId) {
   return db.getAllAsync('SELECT * FROM goal_entries WHERE goal_id = ? ORDER BY date DESC, id DESC', goalId);
 }
 
-export async function addGoalEntry(db, { goalId, amount, note }) {
+export async function addGoalEntry(db, { goalId, amount, note, method = null }) {
   await db.runAsync(
-    'INSERT INTO goal_entries (goal_id, amount, date, note) VALUES (?, ?, ?, ?)',
-    goalId, amount, today(), note || null
+    'INSERT INTO goal_entries (goal_id, amount, date, note, method) VALUES (?, ?, ?, ?, ?)',
+    goalId, amount, today(), note || null, method || null
   );
 }
 
@@ -598,7 +620,7 @@ export async function deleteGoalEntry(db, id) {
   await db.runAsync('DELETE FROM goal_entries WHERE id = ?', id);
 }
 
-export async function saveSplit(db, { reason, date, dueDate, shares, myShare }) {
+export async function saveSplit(db, { reason, date, dueDate, shares, myShare, paidWith = null }) {
   const created = [];
   await db.withTransactionAsync(async () => {
     for (const s of shares) {
@@ -610,6 +632,7 @@ export async function saveSplit(db, { reason, date, dueDate, shares, myShare }) 
         reason: reason ? `${reason} (hati-hati)` : 'Hati-hati',
         date,
         due_date: dueDate,
+        method: paidWith,
       });
       created.push({ ...res, name: s.name, amount: s.amount });
     }
@@ -618,7 +641,7 @@ export async function saveSplit(db, { reason, date, dueDate, shares, myShare }) 
         kind: 'expense',
         amount: myShare.amount,
         category_id: myShare.categoryId,
-        method: myShare.method || 'cash',
+        method: myShare.method || paidWith || 'cash',
         date,
         note: reason ? `${reason} (my share)` : 'My share',
       });
@@ -634,13 +657,14 @@ export async function markNoSpend(db, date = today()) {
 export async function todaySummary(db) {
   const t = today();
   const m = monthKey(t);
-  const [spentToday, spentMonth, settings] = await Promise.all([
+  const [spentToday, spentMonth, settings, out] = await Promise.all([
     sumBetween(db, 'expense', t, t),
     sumBetween(db, 'expense', `${m}-01`, `${m}-31`),
     getSettings(db),
+    moneyOut(db, `${m}-01`, `${m}-31`),
   ]);
   const budget = Number(settings.budget || 0);
-  return { date: t, month: m, spentToday, spentMonth, budget, name: settings.name || '' };
+  return { date: t, month: m, spentToday, spentMonth, usedMonth: spentMonth + out.outMonth, budget, name: settings.name || '' };
 }
 
 function addMonths(iso, n, anchorDay) {
@@ -756,21 +780,27 @@ export function photosIn(snap) {
 }
 
 export async function getWallets(db) {
-  const [starts, flows, outs, ins] = await Promise.all([
+  const [starts, flows, outs, ins, debtFlows, payFlows, goalFlows] = await Promise.all([
     db.getAllAsync('SELECT * FROM wallets'),
     db.getAllAsync(`SELECT method, SUM(CASE WHEN kind = 'income' THEN amount ELSE -amount END) AS net, COUNT(*) AS n FROM transactions GROUP BY method`),
     db.getAllAsync('SELECT from_method AS method, SUM(amount + fee) AS total, COUNT(*) AS n FROM transfers GROUP BY from_method'),
     db.getAllAsync('SELECT to_method AS method, SUM(amount) AS total, COUNT(*) AS n FROM transfers GROUP BY to_method'),
+    db.getAllAsync(`SELECT method, SUM(CASE WHEN direction = 'owed' THEN -COALESCE(principal, amount) ELSE COALESCE(principal, amount) END) AS net FROM debts WHERE method IS NOT NULL GROUP BY method`),
+    db.getAllAsync(`SELECT p.method AS method, SUM(CASE WHEN d.direction = 'owed' THEN p.amount ELSE -p.amount END) AS net FROM debt_payments p JOIN debts d ON d.id = p.debt_id WHERE p.method IS NOT NULL GROUP BY p.method`),
+    db.getAllAsync('SELECT method, SUM(-amount) AS net FROM goal_entries WHERE method IS NOT NULL GROUP BY method'),
   ]);
   const by = (rows) => Object.fromEntries(rows.map((r) => [r.key ?? r.method, r]));
   const S = by(starts);
   const F = by(flows);
   const O = by(outs);
   const I = by(ins);
+  const D = by(debtFlows);
+  const P = by(payFlows);
+  const G = by(goalFlows);
   return PAYMENT_METHODS.map((m) => {
     const start = S[m.key]?.start || 0;
-    const balance = start + (F[m.key]?.net || 0) - (O[m.key]?.total || 0) + (I[m.key]?.total || 0);
-    const used = !!(S[m.key] || F[m.key] || O[m.key] || I[m.key]);
+    const balance = start + (F[m.key]?.net || 0) - (O[m.key]?.total || 0) + (I[m.key]?.total || 0) + (D[m.key]?.net || 0) + (P[m.key]?.net || 0) + (G[m.key]?.net || 0);
+    const used = !!(S[m.key] || F[m.key] || O[m.key] || I[m.key] || D[m.key] || P[m.key] || G[m.key]);
     return { ...m, start, balance, used, hidden: !!S[m.key]?.hidden, setUp: !!S[m.key] };
   });
 }

@@ -25,7 +25,7 @@ export function freshen(data) {
   const t = todayIso();
   const out = { ...data };
   if (out.date !== t) out.spentToday = 0;
-  if (out.month !== t.slice(0, 7)) out.spentMonth = 0;
+  if (out.month !== t.slice(0, 7)) { out.spentMonth = 0; out.usedMonth = 0; }
   return out;
 }
 

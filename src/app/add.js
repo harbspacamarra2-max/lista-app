@@ -30,7 +30,7 @@ import { useData } from '../lib/store';
 import { QUIPS, fill, pick } from '../lib/quips';
 import { radius, useTheme } from '../lib/theme';
 import { Aura, Button, Chip, Field, IconButton, Row, Segmented, Txt, tap } from '../components/ui';
-import { AmountInput, CalendarSheet } from '../components/bits';
+import { AmountInput, CalendarSheet, WalletPicker } from '../components/bits';
 
 export default function Add() {
   const theme = useTheme();
@@ -58,6 +58,7 @@ export default function Add() {
   const [interest, setInterest] = useState('');
   const [planCount, setPlanCount] = useState(0);
   const [planFreq, setPlanFreq] = useState('monthly');
+  const [utangWallet, setUtangWallet] = useState('cash');
   const [extras, setExtras] = useState(false);
   const [remind, setRemind] = useState(true);
   const [oldReminder, setOldReminder] = useState(null);
@@ -103,6 +104,7 @@ export default function Add() {
           }
           if (d.interest || d.plan_count > 1) setExtras(true);
           setDirection(d.direction);
+          setUtangWallet(d.method || 'none');
           setPersonName(d.person_name);
           setReason(d.reason || '');
           setDate(d.date);
@@ -172,6 +174,7 @@ export default function Add() {
           reason: reason.trim(),
           date,
           due_date: dueDate,
+          method: utangWallet === 'none' ? null : utangWallet,
         });
         if (oldReminder) await cancelReminder(oldReminder);
         let rid = null;
@@ -315,6 +318,19 @@ export default function Add() {
 
             <Label>For what?</Label>
             <Field placeholder="Lunch, pamasahe, concert ticket…" value={reason} onChangeText={setReason} />
+
+            <Label>{direction === 'owed' ? 'Money came from' : 'Money went to'}</Label>
+            <WalletPicker
+              value={utangWallet}
+              onChange={setUtangWallet}
+              hint={
+                utangWallet === 'none'
+                  ? 'Your wallet and budget won’t change. Good for old utang you’re just writing down.'
+                  : direction === 'owed'
+                    ? 'Takes it out of your wallet and counts it in this month’s budget until they pay you back.'
+                    : 'Adds it to your wallet. Paying them back takes it out again.'
+              }
+            />
 
             {extras ? (
               <>

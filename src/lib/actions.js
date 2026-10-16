@@ -114,6 +114,7 @@ export async function executeAction(db, a, categories, extra = {}) {
       reason: a.reason || '',
       date: a.date || today(),
       due_date: a.dueDate || null,
+      method: a.method || 'cash',
     });
     if (a.dueDate) {
       const rid = await scheduleDueReminder({ dueDate: a.dueDate, personName: name, direction: a.direction, amount: a.amount });
@@ -136,7 +137,7 @@ export async function executeAction(db, a, categories, extra = {}) {
     for (const d of open) {
       if (left <= 0) break;
       const pay = Math.min(left, d.remaining);
-      await addPayment(db, { debtId: d.id, amount: pay, date: a.date || today(), photo: extra.photo || null });
+      await addPayment(db, { debtId: d.id, amount: pay, date: a.date || today(), photo: extra.photo || null, method: a.method });
       left -= pay;
       applied += pay;
     }
@@ -153,7 +154,8 @@ export async function executeAction(db, a, categories, extra = {}) {
       date: a.date || today(),
       dueDate: a.dueDate || null,
       shares: a.people.map((n, i) => ({ name: cap(n), amount: each + (a.includeMe === false && i === 0 ? extraCents : 0) })),
-      myShare: a.includeMe === false ? null : { amount: each + extraCents, categoryId: c?.id },
+      myShare: a.includeMe === false ? null : { amount: each + extraCents, categoryId: c?.id, method: a.method || 'cash' },
+      paidWith: a.method || 'cash',
     });
     return `🍕 Split done · ${created.length} utang added`;
   }

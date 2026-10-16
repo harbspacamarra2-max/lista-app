@@ -23,7 +23,7 @@ import { useData, useQuery } from '../../lib/store';
 import { fill, pick } from '../../lib/quips';
 import { radius, useTheme } from '../../lib/theme';
 import { Avatar, Badge, Button, Card, Field, IconButton, ProgressBar, Row, Screen, SectionHeader, Sheet, Txt, tap } from '../../components/ui';
-import { DebtStatus } from '../../components/bits';
+import { DebtStatus, WalletPicker } from '../../components/bits';
 import { Celebrate } from '../../components/celebrate';
 
 export default function PersonScreen() {
@@ -36,6 +36,7 @@ export default function PersonScreen() {
   const [payFor, setPayFor] = useState(null);
   const [payAmount, setPayAmount] = useState('');
   const [payPhoto, setPayPhoto] = useState(null);
+  const [payWallet, setPayWallet] = useState('cash');
   const [viewPhoto, setViewPhoto] = useState(null);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState('');
@@ -79,6 +80,7 @@ export default function PersonScreen() {
   const openPay = (debt) => {
     setPayFor(debt);
     setPayPhoto(null);
+    setPayWallet(debt.method || 'cash');
     setPayAmount(centavosToInput(debt.plan ? debt.plan.nextAmount : debt.remaining));
   };
 
@@ -105,7 +107,7 @@ export default function PersonScreen() {
   const savePayment = async () => {
     const cents = Math.min(toCentavos(payAmount), payFor.remaining);
     if (cents <= 0) return;
-    await addPayment(db, { debtId: payFor.id, amount: cents, date: today(), photo: payPhoto });
+    await addPayment(db, { debtId: payFor.id, amount: cents, date: today(), photo: payPhoto, method: payWallet === 'none' ? null : payWallet });
     if (cents >= payFor.remaining && payFor.reminder_id) {
       await cancelReminder(payFor.reminder_id);
       await setDebtReminder(db, payFor.id, null);
@@ -265,6 +267,10 @@ export default function PersonScreen() {
                 </Pressable>
               ))}
             </Row>
+            <Txt w={800} size={13} color="sub" style={{ marginTop: 16, marginBottom: 8 }}>
+              {payFor.direction === 'owe' ? 'Paid from' : 'Received in'}
+            </Txt>
+            <WalletPicker value={payWallet} onChange={setPayWallet} />
             {payPhoto ? (
               <View style={{ marginTop: 14 }}>
                 <Image source={{ uri: payPhoto }} style={{ width: '100%', height: 180, borderRadius: radius.lg, backgroundColor: theme.cardAlt }} resizeMode="cover" />
