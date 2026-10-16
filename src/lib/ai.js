@@ -2,9 +2,12 @@ import Constants from 'expo-constants';
 import { today } from './format';
 
 const KEY = String(process.env.EXPO_PUBLIC_GEMINI_KEY || Constants.expoConfig?.extra?.geminiKey || '').trim();
-const MODELS = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-flash-latest'];
+const MODELS = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-flash-latest'];
+const FAST_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-flash-latest'];
+const THINKING = { 'gemini-3.8-flash': 'low', 'gemini-3.6-flash': 'minimal', 'gemini-3.5-flash-lite': 'minimal' };
+const noThinkingConfig = new Set();
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models';
-let preferred = 0;
+const preferred = { main: 0, fast: 0 };
 
 export function hasAiKey() {
   return !!KEY;
@@ -46,19 +49,35 @@ async function call(model, body, timeout) {
   }
 }
 
-export async function generate({ system, contents, json = true, temperature = 0.2, timeout = 25000 }) {
+function bodyFor(model, base, withThinking) {
+  const level = THINKING[model];
+  if (!withThinking || !level) return base;
+  return { ...base, generationConfig: { ...base.generationConfig, thinkingConfig: { thinkingLevel: level } } };
+}
+
+export async function generate({ system, contents, json = true, temperature = 0.2, timeout = 25000, fast = false }) {
   if (!KEY) throw new AiError('AI is not set up in this build', 'nokey');
-  const body = {
+  const list = fast ? FAST_MODELS : MODELS;
+  const lane = fast ? 'fast' : 'main';
+  const base = {
     systemInstruction: { parts: [{ text: system }] },
     contents,
     generationConfig: { temperature, ...(json ? { responseMimeType: 'application/json' } : {}) },
   };
   let last;
-  for (let i = 0; i < MODELS.length; i++) {
-    const idx = (preferred + i) % MODELS.length;
+  for (let i = 0; i < list.length; i++) {
+    const idx = (preferred[lane] + i) % list.length;
+    const model = list[idx];
     try {
-      const text = await call(MODELS[idx], body, timeout);
-      preferred = idx;
+      let text;
+      try {
+        text = await call(model, bodyFor(model, base, !noThinkingConfig.has(model)), timeout);
+      } catch (e) {
+        if (e.code !== 400 || noThinkingConfig.has(model) || !THINKING[model]) throw e;
+        noThinkingConfig.add(model);
+        text = await call(model, base, timeout);
+      }
+      preferred[lane] = idx;
       return json ? parseJson(text) : text;
     } catch (e) {
       last = e;
@@ -176,6 +195,7 @@ export function normalizeActions(list) {
 
 export async function aiUnderstand(text, ctx) {
   const out = await generate({
+    fast: true,
     system: `You are Sinop, a friendly Filipino expense and utang (debt) tracker. Turn what the user typed into actions to save.
 ${ACTION_RULES}
 ${contextLine(ctx)}
@@ -218,6 +238,7 @@ Respond with JSON only: {"reply":"your answer","actions":[]}.`,
 
 export async function aiTips(snapshot, monthLabel) {
   const out = await generate({
+    fast: true,
     system: `You are Sinop, a friendly Filipino money buddy. Look at the user's spending for ${monthLabel} and give exactly 3 short, specific, practical tips (each under 25 words, Taglish ok, one emoji at the start). Point out real patterns from the numbers. No shaming. Respond with JSON only: {"tips":["...","...","..."]}.`,
     contents: [{ role: 'user', parts: [{ text: snapshot }] }],
     temperature: 0.7,
