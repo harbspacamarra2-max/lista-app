@@ -9,7 +9,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  PAYMENT_METHODS,
+  pickableMethods,
   deleteDebt,
   deleteTransaction,
   frequentEntries,
@@ -448,7 +448,7 @@ export default function Add() {
 
             <Label>{type === 'income' ? 'Received via' : 'Paid with'}</Label>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {PAYMENT_METHODS.map((m) => (
+              {pickableMethods().map((m) => (
                 <Chip key={m.key} label={m.label} emoji={m.emoji} selected={method === m.key} onPress={() => setMethod(m.key)} />
               ))}
             </ScrollView>

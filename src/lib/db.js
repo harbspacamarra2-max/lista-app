@@ -27,8 +27,70 @@ export const PAYMENT_METHODS = [
   { key: 'bank', label: 'Bank', emoji: '🏦' },
 ];
 
+const BASE_METHOD_COUNT = PAYMENT_METHODS.length;
+
 export function methodLabel(key) {
   return PAYMENT_METHODS.find((m) => m.key === key)?.label ?? 'Cash';
+}
+
+export function pickableMethods() {
+  return PAYMENT_METHODS.filter((m) => !m.hidden);
+}
+
+export function findMethod(text) {
+  const t = String(text || '').trim().toLowerCase();
+  if (!t) return null;
+  const flat = t.replace(/[^a-z0-9]/g, '');
+  return PAYMENT_METHODS.find((m) => m.key === t || m.label.toLowerCase() === t || m.label.toLowerCase().replace(/[^a-z0-9]/g, '') === flat) || null;
+}
+
+export async function loadCustomWallets(db) {
+  let rows = [];
+  try {
+    rows = await db.getAllAsync('SELECT key, label, emoji, hidden FROM wallets WHERE custom = 1 ORDER BY created_at, key');
+  } catch {
+    rows = [];
+  }
+  PAYMENT_METHODS.splice(BASE_METHOD_COUNT);
+  rows.forEach((r) => PAYMENT_METHODS.push({ key: r.key, label: r.label || 'Wallet', emoji: r.emoji || '🏦', custom: true, hidden: !!r.hidden }));
+  return PAYMENT_METHODS;
+}
+
+export async function addCustomWallet(db, { label, emoji, start = 0 }) {
+  const clean = String(label || '').trim().slice(0, 24);
+  if (!clean) throw new Error('Name it first');
+  const existing = findMethod(clean);
+  if (existing && !existing.hidden) return existing.key;
+  if (existing && existing.hidden) {
+    await db.runAsync('UPDATE wallets SET hidden = 0, emoji = ? WHERE key = ?', emoji || existing.emoji, existing.key);
+    await loadCustomWallets(db);
+    return existing.key;
+  }
+  const key = `w_${Date.now().toString(36)}`;
+  await db.runAsync(
+    'INSERT INTO wallets (key, start, hidden, label, emoji, custom, created_at) VALUES (?, ?, 0, ?, ?, 1, ?)',
+    key, start || 0, clean, emoji || '🏦', new Date().toISOString()
+  );
+  await loadCustomWallets(db);
+  return key;
+}
+
+export async function renameCustomWallet(db, key, { label, emoji }) {
+  await db.runAsync('UPDATE wallets SET label = COALESCE(?, label), emoji = COALESCE(?, emoji) WHERE key = ? AND custom = 1', label ? label.trim().slice(0, 24) : null, emoji || null, key);
+  await loadCustomWallets(db);
+}
+
+export async function removeCustomWallet(db, key) {
+  const used = await db.getFirstAsync(
+    `SELECT (SELECT COUNT(*) FROM transactions WHERE method = ?) + (SELECT COUNT(*) FROM transfers WHERE from_method = ? OR to_method = ?)
+      + (SELECT COUNT(*) FROM debts WHERE method = ?) + (SELECT COUNT(*) FROM debt_payments WHERE method = ?)
+      + (SELECT COUNT(*) FROM goal_entries WHERE method = ?) + (SELECT COUNT(*) FROM bills WHERE method = ?) AS n`,
+    key, key, key, key, key, key, key
+  );
+  if (used?.n) await db.runAsync('UPDATE wallets SET hidden = 1 WHERE key = ?', key);
+  else await db.runAsync('DELETE FROM wallets WHERE key = ? AND custom = 1', key);
+  await loadCustomWallets(db);
+  return used?.n ? 'hidden' : 'deleted';
 }
 
 export async function migrate(db) {
@@ -156,6 +218,10 @@ export async function migrate(db) {
     );
   `);
   await addCol('goal_entries', 'method', 'method TEXT');
+  await addCol('wallets', 'label', 'label TEXT');
+  await addCol('wallets', 'emoji', 'emoji TEXT');
+  await addCol('wallets', 'custom', 'custom INTEGER NOT NULL DEFAULT 0');
+  await addCol('wallets', 'created_at', 'created_at TEXT');
   const cols = await db.getAllAsync('PRAGMA table_info(categories)');
   if (!cols.some((c) => c.name === 'budget')) {
     await db.execAsync('ALTER TABLE categories ADD COLUMN budget INTEGER NOT NULL DEFAULT 0');
@@ -175,6 +241,7 @@ export async function migrate(db) {
 }
 
 export async function getSettings(db) {
+  await loadCustomWallets(db);
   const rows = await db.getAllAsync('SELECT key, value FROM settings');
   const out = {};
   for (const r of rows) out[r.key] = r.value;
@@ -801,8 +868,8 @@ export async function getWallets(db) {
     const start = S[m.key]?.start || 0;
     const balance = start + (F[m.key]?.net || 0) - (O[m.key]?.total || 0) + (I[m.key]?.total || 0) + (D[m.key]?.net || 0) + (P[m.key]?.net || 0) + (G[m.key]?.net || 0);
     const used = !!(S[m.key] || F[m.key] || O[m.key] || I[m.key] || D[m.key] || P[m.key] || G[m.key]);
-    return { ...m, start, balance, used, hidden: !!S[m.key]?.hidden, setUp: !!S[m.key] };
-  });
+    return { ...m, start, balance, used, hidden: !!S[m.key]?.hidden || !!m.hidden, setUp: !!S[m.key] };
+  }).filter((w) => !(w.custom && w.hidden));
 }
 
 export async function setWalletStart(db, key, start) {

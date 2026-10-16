@@ -15,7 +15,7 @@ import {
   shiftMonth,
   today,
 } from '../lib/format';
-import { PAYMENT_METHODS, methodLabel } from '../lib/db';
+import { methodLabel, pickableMethods } from '../lib/db';
 import { Avatar, Badge, Chip, IconButton, Row, Sheet, Txt, tap } from './ui';
 
 export function TransactionRow({ tx, onPress, onLongPress, showDate }) {
@@ -332,7 +332,7 @@ export function WalletPicker({ value, onChange, noneLabel = 'Not from my wallet'
   return (
     <View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {PAYMENT_METHODS.map((m) => (
+        {pickableMethods().map((m) => (
           <Chip key={m.key} label={m.label} emoji={m.emoji} small selected={value === m.key} onPress={() => onChange(m.key)} />
         ))}
         <Chip label={noneLabel} emoji="🚫" small selected={!value || value === 'none'} onPress={() => onChange('none')} />

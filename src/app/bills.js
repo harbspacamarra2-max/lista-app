@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
 import {
-  PAYMENT_METHODS,
+  pickableMethods,
   deleteBill,
   listBills,
   listCategories,
@@ -232,7 +232,7 @@ export default function Bills() {
             </View>
             <Txt w={800} size={13} color="sub" style={{ marginTop: 16, marginBottom: 8 }}>Paid with</Txt>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {PAYMENT_METHODS.map((m) => (
+              {pickableMethods().map((m) => (
                 <Chip key={m.key} label={m.label} emoji={m.emoji} small selected={form.method === m.key} onPress={() => setForm((f) => ({ ...f, method: m.key }))} />
               ))}
             </View>

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sinop",
     "slug": "sinop",
-    "version": "1.9.4",
+    "version": "1.9.5",
     "scheme": "sinop",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "io.github.harbspacamarra2max.sinop",
-      "versionCode": 12,
+      "versionCode": 13,
       "adaptiveIcon": {
         "backgroundColor": "#16A06A",
         "foregroundImage": "./assets/android-icon-foreground.png",

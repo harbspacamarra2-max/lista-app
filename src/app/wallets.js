@@ -1,13 +1,20 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSQLiteContext } from 'expo-sqlite';
-import { PAYMENT_METHODS, addTransfer, deleteTransfer, getWallets, listTransfers, setWalletBalance } from '../lib/db';
+import { PAYMENT_METHODS, addCustomWallet, addTransfer, deleteTransfer, getWallets, listTransfers, pickableMethods, removeCustomWallet, renameCustomWallet, setWalletBalance } from '../lib/db';
 import { centavosToInput, cleanAmountInput, peso, prettyDate, toCentavos, today } from '../lib/format';
 import { useData, useQuery } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { Alert } from '../lib/alert';
 import { Button, Card, Chip, Field, GradientCard, IconButton, Row, Screen, SectionHeader, Sheet, Title, Txt, tap } from '../components/ui';
 import { goBack } from '../lib/nav';
+
+const SUGGESTIONS = [
+  ['Maribank', '🧡'], ['GoTyme', '🩵'], ['SeaBank', '🌊'], ['BPI', '🔴'], ['BDO', '🔵'], ['UnionBank', '🟠'],
+  ['Landbank', '🌾'], ['Metrobank', '🏙️'], ['Security Bank', '🛡️'], ['RCBC', '🏛️'], ['PNB', '🏦'], ['CIMB', '❤️'],
+  ['Tonik', '💜'], ['ShopeePay', '🛍️'], ['GrabPay', '💚'], ['Coins.ph', '🪙'], ['Savings', '🐷'], ['Alkansya', '🫙'],
+];
+const EMOJIS = ['🏦', '💳', '🧡', '🩵', '💜', '💚', '🔵', '🔴', '🟠', '🌊', '🐷', '🫙', '🪙', '💰', '📱', '✨'];
 
 export default function Wallets() {
   const theme = useTheme();
@@ -17,6 +24,9 @@ export default function Wallets() {
   const [value, setValue] = useState('');
   const [move, setMove] = useState(false);
   const [form, setForm] = useState({ from: 'gcash', to: 'cash', amount: '', fee: '', note: '' });
+  const [adding, setAdding] = useState(false);
+  const [nw, setNw] = useState({ label: '', emoji: '🏦', amount: '' });
+  const [rename, setRename] = useState('');
 
   const { data } = useQuery(async (d) => {
     const [wallets, transfers] = await Promise.all([getWallets(d), listTransfers(d)]);
@@ -28,15 +38,49 @@ export default function Wallets() {
 
   const openEdit = (w) => {
     setEdit(w);
+    setRename(w.label);
     setValue(w.balance > 0 ? centavosToInput(w.balance) : '');
   };
 
   const saveBalance = async () => {
+    if (edit.custom && rename.trim() && rename.trim() !== edit.label) await renameCustomWallet(db, edit.key, { label: rename });
     await setWalletBalance(db, edit.key, toCentavos(value));
     tap('success');
     setEdit(null);
     bump();
     toast(`${edit.emoji} ${edit.label} set to ${peso(toCentavos(value))}`);
+  };
+
+  const saveNew = async () => {
+    const label = nw.label.trim();
+    if (!label) return;
+    try {
+      const key = await addCustomWallet(db, { label, emoji: nw.emoji });
+      if (toCentavos(nw.amount)) await setWalletBalance(db, key, toCentavos(nw.amount));
+      tap('success');
+      setAdding(false);
+      setNw({ label: '', emoji: '🏦', amount: '' });
+      bump();
+      toast(`${nw.emoji} ${label} added! Lalabas na siya sa “Paid with” 💚`);
+    } catch (e) {
+      Alert.alert('Oops', e?.message || 'Could not add it. Try again.');
+    }
+  };
+
+  const removeWallet = (w) => {
+    Alert.alert(`Remove ${w.label}?`, 'Your past entries stay. It just won’t show up as a choice anymore.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          await removeCustomWallet(db, w.key);
+          setEdit(null);
+          bump();
+          toast(`${w.emoji} ${w.label} removed`);
+        },
+      },
+    ]);
   };
 
   const saveTransfer = async () => {
@@ -73,7 +117,7 @@ export default function Wallets() {
       <Row style={{ justifyContent: 'space-between', marginBottom: 6 }}>
         <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
       </Row>
-      <Title main="your" italic="wallets" sub="Cash, GCash, Maya, cards. Lahat ng pera mo, isang tingin lang." />
+      <Title main="your" italic="wallets" sub="Cash, GCash, Maya, banks. Lahat ng pera mo, isang tingin lang." />
 
       <GradientCard>
         <Txt w={700} size={14} color="rgba(255,255,255,0.85)">Total balance</Txt>
@@ -104,6 +148,13 @@ export default function Wallets() {
           </Card>
         ))}
       </View>
+      <Pressable
+        onPress={() => setAdding(true)}
+        style={({ pressed }) => ({ marginTop: 10, borderRadius: 18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: theme.border, paddingVertical: 16, alignItems: 'center', transform: [{ scale: pressed ? 0.98 : 1 }] })}
+      >
+        <Txt w={800} size={15} color="brand">＋ Add a bank or e-wallet</Txt>
+        <Txt size={12.5} color="sub" style={{ marginTop: 2 }}>Maribank, GoTyme, SeaBank, BPI, ShopeePay…</Txt>
+      </Pressable>
       {wallets.some((w) => w.balance < 0) ? (
         <Txt size={12.5} color="sub" style={{ marginTop: 10, paddingHorizontal: 4 }}>
           Negative? You probably logged spending before setting the starting balance. Tap the wallet to fix it 👌
@@ -135,6 +186,9 @@ export default function Wallets() {
       ) : null}
 
       <Sheet visible={!!edit} onClose={() => setEdit(null)} title={edit ? `${edit.emoji} ${edit.label}` : ''}>
+        {edit?.custom ? (
+          <Field label="Name" value={rename} onChangeText={setRename} maxLength={24} style={{ marginBottom: 14 }} />
+        ) : null}
         <Txt size={14} color="sub">How much is in it right now? Check your app or wallet.</Txt>
         <Field
           value={value}
@@ -146,19 +200,50 @@ export default function Wallets() {
           inputStyle={{ fontSize: 26, fontFamily: 'PlusJakartaSans_800ExtraBold' }}
           right={<Txt w={800} size={20} color="faint">₱</Txt>}
         />
-        <Button title="Save balance" style={{ marginTop: 18 }} onPress={saveBalance} />
+        <Button title="Save" style={{ marginTop: 18 }} onPress={saveBalance} />
+        {edit?.custom ? (
+          <Button title={`Remove ${edit.label}`} variant="ghost" size="md" style={{ marginTop: 10 }} onPress={() => removeWallet(edit)} />
+        ) : null}
+      </Sheet>
+
+      <Sheet visible={adding} onClose={() => setAdding(false)} title="Add a bank or e-wallet 🏦">
+        <Field label="Name" placeholder="e.g. Maribank" value={nw.label} onChangeText={(t) => setNw({ ...nw, label: t })} maxLength={24} autoCapitalize="words" />
+        <Txt w={800} size={13} color="sub" style={{ marginTop: 14, marginBottom: 8 }}>Popular</Txt>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {SUGGESTIONS.filter(([n]) => !PAYMENT_METHODS.some((m) => !m.hidden && m.label.toLowerCase() === n.toLowerCase())).map(([n, e]) => (
+            <Chip key={n} label={n} emoji={e} small selected={nw.label === n} onPress={() => setNw({ ...nw, label: n, emoji: e })} />
+          ))}
+        </View>
+        <Txt w={800} size={13} color="sub" style={{ marginTop: 14, marginBottom: 8 }}>Icon</Txt>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {EMOJIS.map((e) => (
+            <Pressable key={e} onPress={() => setNw({ ...nw, emoji: e })} style={{ width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: nw.emoji === e ? theme.brandTint : theme.cardAlt, borderWidth: nw.emoji === e ? 1.5 : 0, borderColor: theme.brand }}>
+              <Txt size={20}>{e}</Txt>
+            </Pressable>
+          ))}
+        </View>
+        <Field
+          label="How much is in it now? (optional)"
+          value={nw.amount}
+          onChangeText={(t) => setNw({ ...nw, amount: cleanAmountInput(t) })}
+          keyboardType="decimal-pad"
+          placeholder="0"
+          style={{ marginTop: 14 }}
+          right={<Txt w={800} size={16} color="faint">₱</Txt>}
+        />
+        <Button title={nw.label.trim() ? `Add ${nw.emoji} ${nw.label.trim()}` : 'Add wallet'} style={{ marginTop: 18 }} disabled={!nw.label.trim()} onPress={saveNew} />
       </Sheet>
 
       <Sheet visible={move} onClose={() => setMove(false)} title="Move money 💸">
         <Txt w={800} size={13.5} color="sub">From</Txt>
         <Row gap={8} style={{ flexWrap: 'wrap', marginTop: 8 }}>
-          {PAYMENT_METHODS.map((m) => (
+          {pickableMethods().map((m) => (
             <Chip key={m.key} label={m.label} emoji={m.emoji} small selected={form.from === m.key} onPress={() => setForm({ ...form, from: m.key })} />
           ))}
         </Row>
         <Txt w={800} size={13.5} color="sub" style={{ marginTop: 14 }}>To</Txt>
         <Row gap={8} style={{ flexWrap: 'wrap', marginTop: 8 }}>
-          {PAYMENT_METHODS.map((m) => (
+          {pickableMethods().map((m) => (
             <Chip key={m.key} label={m.label} emoji={m.emoji} small selected={form.to === m.key} onPress={() => setForm({ ...form, to: m.key })} />
           ))}
         </Row>

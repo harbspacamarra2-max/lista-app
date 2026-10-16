@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { today } from './format';
+import { findMethod, pickableMethods } from './db';
 
 const KEY = String(process.env.EXPO_PUBLIC_GEMINI_KEY || Constants.expoConfig?.extra?.geminiKey || '').trim();
 const MODELS = ['gemini-3.6-flash', 'gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-flash-latest'];
@@ -116,6 +117,18 @@ export function friendlyAiError(e) {
   }
 }
 
+function normMethod(v, fallback) {
+  const m = findMethod(v);
+  return m && !m.hidden ? m.key : fallback;
+}
+
+function actionRules() {
+  const list = pickableMethods();
+  const keys = list.map((m) => m.key).join('|');
+  const custom = list.filter((m) => m.custom).map((m) => `${m.key} = ${m.label}`);
+  return ACTION_RULES.split('cash|gcash|maya|card|bank').join(keys) + (custom.length ? `\nThe user's own wallets (use the key): ${custom.join(', ')}. If they mention one by name, use its key as the method.` : '');
+}
+
 const ACTION_RULES = `Return actions as JSON objects. Amounts are in Philippine pesos as numbers (no symbols). Dates are YYYY-MM-DD.
 Action types:
 - {"type":"expense","amount":120,"category":"<one of the expense categories>","method":"cash|gcash|maya|card|bank","date":"YYYY-MM-DD","note":"short label"}
@@ -155,7 +168,7 @@ export function normalizeActions(list) {
       if (!a || typeof a !== 'object') return null;
       const date = ISO.test(a.date || '') ? a.date : today();
       const dueDate = ISO.test(a.dueDate || '') ? a.dueDate : null;
-      const method = ['cash', 'gcash', 'maya', 'card', 'bank'].includes(String(a.method || '').toLowerCase()) ? String(a.method).toLowerCase() : 'cash';
+      const method = normMethod(a.method, 'cash');
       switch (a.type) {
         case 'expense':
         case 'income':
@@ -163,12 +176,12 @@ export function normalizeActions(list) {
         case 'debt':
           return { type: 'debt', direction: a.direction === 'owe' ? 'owe' : 'owed', person: String(a.person || '').trim(), amount: toCentavos(a.amount), reason: String(a.reason || '').slice(0, 80), method, date, dueDate };
         case 'payment':
-          return { type: 'payment', direction: a.direction === 'owe' ? 'owe' : 'owed', person: String(a.person || '').trim(), amount: toCentavos(a.amount), method: ['cash', 'gcash', 'maya', 'card', 'bank'].includes(String(a.method || '').toLowerCase()) ? String(a.method).toLowerCase() : undefined, date };
+          return { type: 'payment', direction: a.direction === 'owe' ? 'owe' : 'owed', person: String(a.person || '').trim(), amount: toCentavos(a.amount), method: normMethod(a.method, undefined), date };
         case 'transfer':
           return {
             type: 'transfer',
-            from: ['cash', 'gcash', 'maya', 'card', 'bank'].includes(a.from) ? a.from : 'cash',
-            to: ['cash', 'gcash', 'maya', 'card', 'bank'].includes(a.to) ? a.to : 'gcash',
+            from: normMethod(a.from, 'cash'),
+            to: normMethod(a.to, 'gcash'),
             amount: toCentavos(a.amount),
             fee: toCentavos(a.fee) || 0,
             date,
@@ -197,7 +210,7 @@ export async function aiUnderstand(text, ctx) {
   const out = await generate({
     fast: true,
     system: `You are Sinop, a friendly Filipino expense and utang (debt) tracker. Turn what the user typed into actions to save.
-${ACTION_RULES}
+${actionRules()}
 ${contextLine(ctx)}
 Respond with JSON only: {"actions":[...],"reply":"one short friendly Taglish line"}. If nothing can be logged, return {"actions":[],"reply":"short question asking what they meant"}.`,
     contents: [{ role: 'user', parts: [{ text }] }],
@@ -208,7 +221,7 @@ Respond with JSON only: {"actions":[...],"reply":"one short friendly Taglish lin
 export async function aiScan(base64, ctx) {
   const out = await generate({
     system: `You are Sinop, a Filipino expense tracker. Read the image (a receipt, GCash/Maya screenshot, bank transfer, or bill) and return what should be logged.
-${ACTION_RULES}
+${actionRules()}
 ${contextLine(ctx)}
 Rules for images: a store receipt = one expense with the TOTAL amount and the store as the note. A GCash/Maya "sent money" screenshot = an expense with method gcash/maya, unless the recipient is clearly a known person the user owes, then a payment with direction "owe". "Received money" = income, or a payment with direction "owed" if the sender is a known person who owes the user. Use the date on the image if visible.
 Respond with JSON only: {"actions":[...],"reply":"one short friendly Taglish line about what you found"}.`,
@@ -223,7 +236,7 @@ export async function aiChat(history, snapshot, ctx, persona) {
     system: `${persona || 'You are Sinop, a warm, funny, Gen Z Filipino money buddy inside an expense and utang tracker app. Answer in the same language the user uses (English, Filipino, or Taglish). Keep answers short (under 120 words), use ₱ amounts, and be honest and practical. Light humor is welcome; never shame the user.'}
 You can see the user's data below. Only use these numbers; if something isn't in the data, say you can't see it.
 If the user asks you to log, add, record, or save something, include it in "actions" (they confirm it before saving).
-${ACTION_RULES}
+${actionRules()}
 ${contextLine(ctx)}
 
 USER DATA:

@@ -1,4 +1,5 @@
 import { addDays, today } from './format';
+import { findMethod } from './db';
 
 const METHOD_WORDS = {
   gcash: 'gcash', gc: 'gcash',
@@ -58,6 +59,13 @@ export function parseQuickLog(text, categories = []) {
       const a = parseAmount(tok);
       if (a != null) {
         amount = a;
+        continue;
+      }
+    }
+    if (!method) {
+      const own = findMethod(low);
+      if (own && own.custom && !own.hidden) {
+        method = own.key;
         continue;
       }
     }
