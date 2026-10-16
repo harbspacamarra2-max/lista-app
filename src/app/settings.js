@@ -3,7 +3,8 @@ import { Pressable, Share, Switch, View } from 'react-native';
 import { Alert } from '../lib/alert';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { addCategory, archiveCategory, exportCSV, listCategories, resetAll, setCategoryBudget, setSetting } from '../lib/db';
+import { addCategory, archiveCategory, exportCSV, listCategories, resetAll, setCategoryBudget, setSetting, updateCategory } from '../lib/db';
+import { EmojiChooser } from '../components/emoji';
 import { centavosToInput, cleanAmountInput, peso, pesoShort, toCentavos } from '../lib/format';
 import { setDailyNudge } from '../lib/notify';
 import { useData, useQuery, useSettings } from '../lib/store';
@@ -35,6 +36,7 @@ export default function Settings() {
   const [catSheet, setCatSheet] = useState(params.section === 'categories');
   const [catKind, setCatKind] = useState('expense');
   const [newCat, setNewCat] = useState({ name: '', emoji: '☕', color: 'mint' });
+  const [catEdit, setCatEdit] = useState({ name: '', emoji: '' });
   const [love, setLove] = useState(false);
   const [editCat, setEditCat] = useState(null);
   const [lockSheet, setLockSheet] = useState(false);
@@ -488,21 +490,39 @@ export default function Settings() {
               small
               onPress={() => {
                 setEditCat(c);
+                setCatEdit({ name: c.name, emoji: c.emoji });
                 setCatBudget(centavosToInput(c.budget || 0));
               }}
             />
           ))}
         </View>
         <Txt size={12} color="faint" style={{ marginTop: 8 }}>
-          {catKind === 'expense' ? 'Tap a category to set a monthly budget 🎯' : 'Tap a custom category to remove it.'}
+          {catKind === 'expense' ? 'Tap a category to rename it, change its icon, or set a monthly budget 🎯' : 'Tap a category to rename it or change its icon.'}
         </Txt>
 
         {editCat ? (
           <Card style={{ marginTop: 12 }} padding={14}>
             <Row style={{ justifyContent: 'space-between' }}>
-              <Txt w={800} size={15}>{editCat.emoji} {editCat.name}</Txt>
+              <Txt w={800} size={15}>{catEdit.emoji} {catEdit.name || editCat.name}</Txt>
               <IconButton icon="close" size={32} tint="cardAlt" onPress={() => setEditCat(null)} label="Close" />
             </Row>
+            <Field value={catEdit.name} onChangeText={(t) => setCatEdit((x) => ({ ...x, name: t }))} placeholder="Category name" maxLength={20} style={{ marginTop: 10 }} />
+            <EmojiChooser choices={EMOJI_CHOICES} value={catEdit.emoji} onChange={(e) => setCatEdit((x) => ({ ...x, emoji: e }))} style={{ marginTop: 10 }} />
+            <Button
+              title="Save name & icon"
+              size="md"
+              variant="soft"
+              style={{ marginTop: 10 }}
+              disabled={!catEdit.name.trim() || (catEdit.name.trim() === editCat.name && catEdit.emoji === editCat.emoji)}
+              onPress={async () => {
+                await updateCategory(db, editCat.id, { name: catEdit.name, emoji: catEdit.emoji });
+                tap('success');
+                toast(`${catEdit.emoji} ${catEdit.name.trim()} saved ✓`);
+                setEditCat(null);
+                bump();
+                reload();
+              }}
+            />
             {editCat.kind === 'expense' ? (
               <>
                 <Txt size={12.5} color="sub" style={{ marginTop: 6 }}>Monthly budget (leave empty for none). We’ll warn you at 80%.</Txt>
@@ -545,29 +565,7 @@ export default function Settings() {
 
         <Txt w={800} size={15} style={{ marginTop: 20, marginBottom: 10 }}>Add new</Txt>
         <Field placeholder="Name, e.g. Milk tea" value={newCat.name} onChangeText={(t) => setNewCat((s) => ({ ...s, name: t }))} maxLength={20} />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-          {EMOJI_CHOICES.map((e) => (
-            <Pressable
-              key={e}
-              onPress={() => {
-                tap();
-                setNewCat((s) => ({ ...s, emoji: e }));
-              }}
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 14,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: newCat.emoji === e ? theme.brandTint : theme.card,
-                borderWidth: 1.5,
-                borderColor: newCat.emoji === e ? theme.brand : theme.border,
-              }}
-            >
-              <Txt size={20}>{e}</Txt>
-            </Pressable>
-          ))}
-        </View>
+        <EmojiChooser choices={EMOJI_CHOICES} value={newCat.emoji} onChange={(e) => setNewCat((st) => ({ ...st, emoji: e }))} style={{ marginTop: 12 }} />
         <Row gap={8} style={{ marginTop: 12, flexWrap: 'wrap' }}>
           {swatchNames.map((n) => {
             const sw = swatch(theme, n);

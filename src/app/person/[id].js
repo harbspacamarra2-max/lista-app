@@ -24,6 +24,9 @@ import { fill, pick } from '../../lib/quips';
 import { radius, useTheme } from '../../lib/theme';
 import { Avatar, Badge, Button, Card, Field, IconButton, ProgressBar, Row, Screen, SectionHeader, Sheet, Txt, tap } from '../../components/ui';
 import { DebtStatus, WalletPicker } from '../../components/bits';
+import { EmojiChooser } from '../../components/emoji';
+
+const PERSON_EMOJIS = ['🙂', '😎', '🤓', '🥳', '😺', '🐶', '🦊', '🐼', '🐸', '🌻', '🍓', '⭐', '👩', '👨', '👵', '👴', '💖', '👑'];
 import { Celebrate } from '../../components/celebrate';
 import { goBack } from '../../lib/nav';
 
@@ -40,6 +43,7 @@ export default function PersonScreen() {
   const [payWallet, setPayWallet] = useState('cash');
   const [viewPhoto, setViewPhoto] = useState(null);
   const [renaming, setRenaming] = useState(false);
+  const [newEmoji, setNewEmoji] = useState('');
   const [newName, setNewName] = useState('');
   const [showPaid, setShowPaid] = useState(false);
   const [party, setParty] = useState(null);
@@ -172,6 +176,7 @@ export default function PersonScreen() {
             icon="create-outline"
             onPress={() => {
               setNewName(person.name);
+              setNewEmoji(person.emoji);
               setRenaming(true);
             }}
             label="Rename"
@@ -306,14 +311,16 @@ export default function PersonScreen() {
         ) : null}
       </Sheet>
 
-      <Sheet visible={renaming} onClose={() => setRenaming(false)} title="Rename">
-        <Field value={newName} onChangeText={setNewName} autoFocus autoCapitalize="words" />
+      <Sheet visible={renaming} onClose={() => setRenaming(false)} title="Edit name & icon">
+        <Field value={newName} onChangeText={setNewName} autoCapitalize="words" />
+        <Txt w={800} size={13} color="sub" style={{ marginTop: 14, marginBottom: 8 }}>Icon</Txt>
+        <EmojiChooser choices={PERSON_EMOJIS} value={newEmoji} onChange={setNewEmoji} />
         <Button
           title="Save"
           style={{ marginTop: 16 }}
           disabled={!newName.trim()}
           onPress={async () => {
-            await renamePerson(db, personId, newName);
+            await renamePerson(db, personId, newName, newEmoji);
             setRenaming(false);
             bump();
           }}

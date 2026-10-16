@@ -10,6 +10,7 @@ import { Button, Card, Chip, EmptyState, Field, IconButton, ProgressBar, Row, Sc
 import { CalendarSheet } from '../components/bits';
 import { Ring, goalHint } from '../components/goals';
 import { goBack } from '../lib/nav';
+import { EmojiChooser } from '../components/emoji';
 
 const GOAL_EMOJIS = ['🐷', '📱', '💻', '✈️', '🏝️', '🎧', '👟', '🎓', '🚗', '🏠', '🎁', '💍', '🎮', '📷', '🛵', '🆘'];
 const IDEAS = [
@@ -105,29 +106,7 @@ export default function Goals() {
           style={{ marginTop: 10 }}
           right={<Txt w={800} size={18} color="faint">₱</Txt>}
         />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-          {GOAL_EMOJIS.map((e) => (
-            <Pressable
-              key={e}
-              onPress={() => {
-                tap();
-                setForm((f) => ({ ...f, emoji: e }));
-              }}
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: 14,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: form.emoji === e ? theme.brandTint : theme.card,
-                borderWidth: 1.5,
-                borderColor: form.emoji === e ? theme.brand : theme.border,
-              }}
-            >
-              <Txt size={20}>{e}</Txt>
-            </Pressable>
-          ))}
-        </View>
+        <EmojiChooser choices={GOAL_EMOJIS} value={form.emoji} onChange={(e) => setForm((f) => ({ ...f, emoji: e }))} style={{ marginTop: 12 }} />
         <Row gap={8} style={{ marginTop: 12, flexWrap: 'wrap' }}>
           {swatchNames.map((n) => {
             const sw = swatch(theme, n);

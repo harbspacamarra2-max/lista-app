@@ -19,6 +19,7 @@ import { Alert } from '../lib/alert';
 import { Avatar, Badge, Button, Card, Chip, EmptyState, Field, IconButton, Row, Screen, Segmented, Sheet, Title, Txt, tap } from '../components/ui';
 import { CalendarSheet } from '../components/bits';
 import { goBack } from '../lib/nav';
+import { EmojiChooser } from '../components/emoji';
 
 const PRESETS = [
   ['Netflix', '🎬', 'Fun'],
@@ -187,26 +188,7 @@ export default function Bills() {
               style={{ marginTop: 10 }}
               right={<Txt w={800} size={18} color="faint">₱</Txt>}
             />
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 }}>
-              {EMOJIS.map((e) => (
-                <Pressable
-                  key={e}
-                  onPress={() => setForm((f) => ({ ...f, emoji: e }))}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 13,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: form.emoji === e ? theme.brandTint : theme.card,
-                    borderWidth: 1.5,
-                    borderColor: form.emoji === e ? theme.brand : theme.border,
-                  }}
-                >
-                  <Txt size={19}>{e}</Txt>
-                </Pressable>
-              ))}
-            </View>
+            <EmojiChooser choices={EMOJIS} value={form.emoji} onChange={(e) => setForm((f) => ({ ...f, emoji: e }))} style={{ marginTop: 12 }} />
             <Txt w={800} size={13} color="sub" style={{ marginTop: 16, marginBottom: 8 }}>How often?</Txt>
             <Segmented
               value={form.freq}

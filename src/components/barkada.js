@@ -5,6 +5,7 @@ import { listPeople, saveGroup } from '../lib/db';
 import { useQuery } from '../lib/store';
 import { useTheme } from '../lib/theme';
 import { Button, Chip, Field, Row, Sheet, Txt, tap } from './ui';
+import { EmojiChooser } from './emoji';
 
 export const GROUP_EMOJIS = ['👯', '🍻', '🎓', '🏀', '🎮', '💼', '🏠', '✈️', '🎤', '⛪', '🍜', '💅'];
 
@@ -40,17 +41,7 @@ export function GroupSheet({ visible, onClose, initial, onSaved }) {
   return (
     <Sheet visible={visible} onClose={onClose} title={initial ? 'Edit barkada' : 'New barkada 👯'}>
       <Field placeholder="Name, e.g. Block mates, Tropa, Fam" value={name} onChangeText={setName} maxLength={28} />
-      <Row gap={6} style={{ flexWrap: 'wrap', marginTop: 12 }}>
-        {GROUP_EMOJIS.map((e) => (
-          <Pressable
-            key={e}
-            onPress={() => setEmoji(e)}
-            style={{ width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: e === emoji ? theme.brandTint : theme.cardAlt, borderWidth: e === emoji ? 1.5 : 0, borderColor: theme.brand }}
-          >
-            <Txt size={20}>{e}</Txt>
-          </Pressable>
-        ))}
-      </Row>
+      <EmojiChooser choices={GROUP_EMOJIS} value={emoji} onChange={setEmoji} style={{ marginTop: 12 }} />
       <Txt w={800} size={14} color="sub" style={{ marginTop: 18, marginBottom: 8 }}>Members</Txt>
       <Row gap={8} style={{ flexWrap: 'wrap' }}>
         {members.map((m) => (

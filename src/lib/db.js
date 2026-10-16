@@ -28,6 +28,7 @@ export const PAYMENT_METHODS = [
 ];
 
 const BASE_METHOD_COUNT = PAYMENT_METHODS.length;
+const BASE_METHODS = PAYMENT_METHODS.map((m) => ({ ...m }));
 
 export function methodLabel(key) {
   return PAYMENT_METHODS.find((m) => m.key === key)?.label ?? 'Cash';
@@ -46,12 +47,18 @@ export function findMethod(text) {
 
 export async function loadCustomWallets(db) {
   let rows = [];
+  let overrides = [];
   try {
     rows = await db.getAllAsync('SELECT key, label, emoji, hidden FROM wallets WHERE custom = 1 ORDER BY created_at, key');
+    overrides = await db.getAllAsync('SELECT key, label, emoji FROM wallets WHERE custom = 0 AND (label IS NOT NULL OR emoji IS NOT NULL)');
   } catch {
     rows = [];
   }
   PAYMENT_METHODS.splice(BASE_METHOD_COUNT);
+  BASE_METHODS.forEach((b, i) => {
+    const o = overrides.find((x) => x.key === b.key);
+    PAYMENT_METHODS[i] = { ...b, label: o?.label || b.label, emoji: o?.emoji || b.emoji };
+  });
   rows.forEach((r) => PAYMENT_METHODS.push({ key: r.key, label: r.label || 'Wallet', emoji: r.emoji || '🏦', custom: true, hidden: !!r.hidden }));
   return PAYMENT_METHODS;
 }
@@ -76,7 +83,11 @@ export async function addCustomWallet(db, { label, emoji, start = 0 }) {
 }
 
 export async function renameCustomWallet(db, key, { label, emoji }) {
-  await db.runAsync('UPDATE wallets SET label = COALESCE(?, label), emoji = COALESCE(?, emoji) WHERE key = ? AND custom = 1', label ? label.trim().slice(0, 24) : null, emoji || null, key);
+  await db.runAsync(
+    `INSERT INTO wallets (key, start, label, emoji) VALUES (?, 0, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET label = COALESCE(excluded.label, label), emoji = COALESCE(excluded.emoji, emoji)`,
+    key, label ? label.trim().slice(0, 24) : null, emoji || null
+  );
   await loadCustomWallets(db);
 }
 
@@ -401,8 +412,12 @@ export function getPerson(db, id) {
   return db.getFirstAsync('SELECT * FROM people WHERE id = ?', id);
 }
 
-export async function renamePerson(db, id, name) {
-  await db.runAsync('UPDATE people SET name = ? WHERE id = ?', name.trim(), id);
+export async function renamePerson(db, id, name, emoji) {
+  await db.runAsync('UPDATE people SET name = ?, emoji = COALESCE(?, emoji) WHERE id = ?', name.trim(), emoji || null, id);
+}
+
+export async function updateCategory(db, id, { name, emoji }) {
+  await db.runAsync('UPDATE categories SET name = COALESCE(?, name), emoji = COALESCE(?, emoji) WHERE id = ?', name ? name.trim().slice(0, 20) : null, emoji || null, id);
 }
 
 export async function deletePerson(db, id) {

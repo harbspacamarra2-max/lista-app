@@ -8,60 +8,13 @@ import { useTheme } from '../lib/theme';
 import { Alert } from '../lib/alert';
 import { Button, Card, Chip, Field, GradientCard, IconButton, Row, Screen, SectionHeader, Sheet, Title, Txt, tap } from '../components/ui';
 import { goBack } from '../lib/nav';
+import { EmojiChooser } from '../components/emoji';
 
 const SUGGESTIONS = [
   ['Maribank', '🧡'], ['GoTyme', '🩵'], ['SeaBank', '🌊'], ['BPI', '🔴'], ['BDO', '🔵'], ['UnionBank', '🟠'],
   ['Landbank', '🌾'], ['Metrobank', '🏙️'], ['Security Bank', '🛡️'], ['RCBC', '🏛️'], ['PNB', '🏦'], ['CIMB', '❤️'],
   ['Tonik', '💜'], ['ShopeePay', '🛍️'], ['GrabPay', '💚'], ['Coins.ph', '🪙'], ['Savings', '🐷'], ['Alkansya', '🫙'],
 ];
-function firstEmoji(text) {
-  const t = String(text || '').replace(/\s+/g, '');
-  if (!t) return '';
-  try {
-    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-      const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-      const first = seg.segment(t)[Symbol.iterator]().next().value;
-      if (first) return first.segment;
-    }
-  } catch {
-  }
-  return Array.from(t).slice(0, 2).join('');
-}
-
-function EmojiChooser({ value, onChange }) {
-  const theme = useTheme();
-  const [typed, setTyped] = useState('');
-  const custom = value && !EMOJIS.includes(value);
-  return (
-    <View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {custom ? (
-          <View style={{ width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.brandTint, borderWidth: 1.5, borderColor: theme.brand }}>
-            <Txt size={20}>{value}</Txt>
-          </View>
-        ) : null}
-        {EMOJIS.map((e) => (
-          <Pressable key={e} onPress={() => onChange(e)} style={{ width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: value === e ? theme.brandTint : theme.cardAlt, borderWidth: value === e ? 1.5 : 0, borderColor: theme.brand }}>
-            <Txt size={20}>{e}</Txt>
-          </Pressable>
-        ))}
-      </View>
-      <Field
-        placeholder="Or type / paste any emoji 😊"
-        value={typed}
-        onChangeText={(t) => {
-          const e = firstEmoji(t);
-          setTyped(e);
-          if (e) onChange(e);
-        }}
-        style={{ marginTop: 10 }}
-        maxLength={16}
-        autoCorrect={false}
-      />
-    </View>
-  );
-}
-
 const EMOJIS = ['🏦', '💳', '🧡', '🩵', '💜', '💚', '🔵', '🔴', '🟠', '🌊', '🐷', '🫙', '🪙', '💰', '📱', '✨'];
 
 export default function Wallets() {
@@ -93,14 +46,14 @@ export default function Wallets() {
   };
 
   const saveBalance = async () => {
-    if (edit.custom && ((rename.trim() && rename.trim() !== edit.label) || (reEmoji && reEmoji !== edit.emoji))) {
+    if ((rename.trim() && rename.trim() !== edit.label) || (reEmoji && reEmoji !== edit.emoji)) {
       await renameCustomWallet(db, edit.key, { label: rename.trim() || edit.label, emoji: reEmoji || edit.emoji });
     }
     await setWalletBalance(db, edit.key, toCentavos(value));
     tap('success');
     setEdit(null);
     bump();
-    toast(`${edit.custom ? reEmoji || edit.emoji : edit.emoji} ${edit.custom ? rename.trim() || edit.label : edit.label} saved ✓`);
+    toast(`${reEmoji || edit.emoji} ${rename.trim() || edit.label} saved ✓`);
   };
 
   const saveNew = async () => {
@@ -193,7 +146,7 @@ export default function Wallets() {
               </View>
               <View style={{ flex: 1 }}>
                 <Txt w={800} size={16}>{w.label}</Txt>
-                <Txt size={12.5} color="sub">{w.used ? 'Tap to fix the balance' : 'Not set up · tap to add'}</Txt>
+                <Txt size={12.5} color="sub">{w.used ? 'Tap to edit name, icon or balance' : 'Not set up · tap to add'}</Txt>
               </View>
               <Txt w={800} size={17} color={w.balance < 0 ? theme.red : 'text'}>{peso(w.balance)}</Txt>
             </Row>
@@ -238,11 +191,11 @@ export default function Wallets() {
       ) : null}
 
       <Sheet visible={!!edit} onClose={() => setEdit(null)} title={edit ? `${edit.emoji} ${edit.label}` : ''}>
-        {edit?.custom ? (
+        {edit ? (
           <>
             <Field label="Name" value={rename} onChangeText={setRename} maxLength={24} />
             <Txt w={800} size={13} color="sub" style={{ marginTop: 14, marginBottom: 8 }}>Icon</Txt>
-            <EmojiChooser value={reEmoji} onChange={setReEmoji} />
+            <EmojiChooser choices={EMOJIS} value={reEmoji} onChange={setReEmoji} />
             <View style={{ height: 14 }} />
           </>
         ) : null}
@@ -272,7 +225,7 @@ export default function Wallets() {
           ))}
         </View>
         <Txt w={800} size={13} color="sub" style={{ marginTop: 14, marginBottom: 8 }}>Icon</Txt>
-        <EmojiChooser value={nw.emoji} onChange={(e) => setNw((x) => ({ ...x, emoji: e }))} />
+        <EmojiChooser choices={EMOJIS} value={nw.emoji} onChange={(e) => setNw((x) => ({ ...x, emoji: e }))} />
         <Field
           label="How much is in it now? (optional)"
           value={nw.amount}

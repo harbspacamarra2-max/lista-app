@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { addGoalEntry, deleteGoal, deleteGoalEntry, getGoal, listGoalEntries } from '../../lib/db';
-import { cleanAmountInput, peso, prettyDate, shortDate, toCentavos } from '../../lib/format';
+import { addGoalEntry, deleteGoal, deleteGoalEntry, getGoal, listGoalEntries, saveGoal } from '../../lib/db';
+import { centavosToInput, cleanAmountInput, peso, prettyDate, shortDate, toCentavos } from '../../lib/format';
 import { useData, useQuery } from '../../lib/store';
 import { swatch, useTheme } from '../../lib/theme';
 import { Alert } from '../../lib/alert';
@@ -12,6 +12,9 @@ import { Ring, goalHint } from '../../components/goals';
 import { Celebrate } from '../../components/celebrate';
 import { WalletPicker } from '../../components/bits';
 import { goBack } from '../../lib/nav';
+import { EmojiChooser } from '../../components/emoji';
+
+const GOAL_EMOJIS = ['🐷', '📱', '💻', '✈️', '🏝️', '🎧', '👟', '🎓', '🚗', '🏠', '🎁', '💍', '🎮', '📷', '🛵', '🆘'];
 
 export default function GoalScreen() {
   const theme = useTheme();
@@ -25,6 +28,7 @@ export default function GoalScreen() {
   const [note, setNote] = useState('');
   const [wallet, setWallet] = useState('cash');
   const [party, setParty] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   const { data } = useQuery(async (d) => {
     const [goal, entries] = await Promise.all([getGoal(d, goalId), listGoalEntries(d, goalId)]);
@@ -99,7 +103,10 @@ export default function GoalScreen() {
     <Screen>
       <Row style={{ justifyContent: 'space-between' }}>
         <IconButton icon="chevron-back" onPress={() => goBack()} label="Back" />
-        <IconButton icon="trash-outline" tint="redTint" color="red" onPress={remove} label="Delete goal" />
+        <Row gap={8}>
+          <IconButton icon="create-outline" onPress={() => setEditing({ name: g.name, emoji: g.emoji, target: centavosToInput(g.target) })} label="Edit goal" />
+          <IconButton icon="trash-outline" tint="redTint" color="red" onPress={remove} label="Delete goal" />
+        </Row>
       </Row>
 
       <View style={{ alignItems: 'center', marginTop: 8 }}>
@@ -182,6 +189,35 @@ export default function GoalScreen() {
           hint={wallet === 'none' ? 'Your wallet and budget won’t change.' : mode === 'add' ? 'Moves it out of your wallet and counts it in this month’s budget.' : 'Adds it back to your wallet.'}
         />
         <Button title={mode === 'add' ? 'Save to ipon' : 'Withdraw'} style={{ marginTop: 16 }} onPress={save} disabled={!toCentavos(amount)} />
+      </Sheet>
+
+      <Sheet visible={!!editing} onClose={() => setEditing(null)} title="Edit ipon goal">
+        {editing ? (
+          <View>
+            <Field label="Name" value={editing.name} onChangeText={(t) => setEditing((x) => ({ ...x, name: t }))} maxLength={30} />
+            <Field
+              label="Target"
+              value={editing.target}
+              onChangeText={(t) => setEditing((x) => ({ ...x, target: cleanAmountInput(t) }))}
+              keyboardType="decimal-pad"
+              style={{ marginTop: 10 }}
+              right={<Txt w={800} size={18} color="faint">₱</Txt>}
+            />
+            <Txt w={800} size={13} color="sub" style={{ marginTop: 14, marginBottom: 8 }}>Icon</Txt>
+            <EmojiChooser choices={GOAL_EMOJIS} value={editing.emoji} onChange={(e) => setEditing((x) => ({ ...x, emoji: e }))} />
+            <Button
+              title="Save"
+              style={{ marginTop: 16 }}
+              disabled={!editing.name.trim() || !toCentavos(editing.target)}
+              onPress={async () => {
+                await saveGoal(db, { id: goalId, name: editing.name, emoji: editing.emoji, color: g.color, target: toCentavos(editing.target), deadline: g.deadline });
+                tap('success');
+                setEditing(null);
+                bump();
+              }}
+            />
+          </View>
+        ) : null}
       </Sheet>
 
       <Celebrate visible={party} icon="🐷" title="goal reached!" subtitle={`${g.emoji} ${g.name} — you did it!`} onDone={() => setParty(false)} />
