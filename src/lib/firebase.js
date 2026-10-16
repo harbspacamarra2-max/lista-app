@@ -12,9 +12,15 @@ import {
 } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore';
 
+function sameSiteAuthDomain() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  const host = window.location.hostname;
+  return host === 'sinop-fc9d8.firebaseapp.com' || host === 'sinop-fc9d8.web.app' ? host : null;
+}
+
 const firebaseConfig = {
   apiKey: 'AIzaSyBsGLIoFtXBWhKAn0wpmcvfCcaxB-0aGyw',
-  authDomain: 'sinop-fc9d8.firebaseapp.com',
+  authDomain: sameSiteAuthDomain() || 'sinop-fc9d8.firebaseapp.com',
   projectId: 'sinop-fc9d8',
   storageBucket: 'sinop-fc9d8.firebasestorage.app',
   messagingSenderId: '780057166279',

@@ -49,3 +49,39 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  firebase:
+    runs-on: ubuntu-latest
+    env:
+      HAS_FIREBASE: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - uses: actions/checkout@v5
+        if: env.HAS_FIREBASE == 'true'
+      - uses: actions/setup-node@v5
+        if: env.HAS_FIREBASE == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: env.HAS_FIREBASE == 'true'
+      - name: Export web app
+        if: env.HAS_FIREBASE == 'true'
+        run: npx expo export --platform web
+        env:
+          EXPO_NO_TELEMETRY: 1
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || vars.GEMINI_API_KEY }}
+          EXPO_PUBLIC_GEMINI_KEY: ${{ secrets.GEMINI_API_KEY || vars.GEMINI_API_KEY }}
+      - name: Add home-screen support
+        if: env.HAS_FIREBASE == 'true'
+        run: node scripts/web-postbuild.js
+      - name: Deploy to Firebase Hosting
+        if: env.HAS_FIREBASE == 'true'
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: sinop-fc9d8
+          channelId: live
+      - name: Firebase not set up yet
+        if: env.HAS_FIREBASE != 'true'
+        run: echo "::notice title=Firebase Hosting skipped::Add the FIREBASE_SERVICE_ACCOUNT secret to also publish to https://sinop-fc9d8.firebaseapp.com"

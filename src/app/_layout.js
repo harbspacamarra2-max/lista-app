@@ -16,6 +16,7 @@ import {
 import { InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
 import { DB_NAME, getSettings, migrate, resetAll, setSetting } from '../lib/db';
 import { LockScreen } from '../components/lock';
+import { NEED_PIN_KEY, PinSetupSheet } from '../components/googlesignin';
 import { Toast } from '../components/toast';
 import { Alert } from '../lib/alert';
 import { buildTheme, ThemeContext } from '../lib/theme';
@@ -26,6 +27,8 @@ import { updateWidget } from '../widget/data';
 import { watchUser, signInWithGoogle, signOutEverywhere } from '../lib/firebase';
 import { decide, getCloudMeta, hasLocalData, pullFromCloud, pushToCloud } from '../lib/cloud';
 
+const RESET_KEY = 'sinop_pin_reset';
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 setupNotifications();
 
@@ -35,6 +38,7 @@ function AppShell() {
   const [version, setVersion] = useState(0);
   const [settings, setSettings] = useState(null);
   const [locked, setLocked] = useState(null);
+  const [pinSetup, setPinSetup] = useState(null);
   const awayAt = useRef(0);
   const [toastState, setToastState] = useState({ message: null, stamp: 0, action: null });
   const toast = useCallback((message, action = null) => setToastState({ message, action, stamp: Date.now() }), []);
@@ -51,15 +55,24 @@ function AppShell() {
     userRef.current = u;
     setUser(u);
     if (u && Platform.OS === 'web') {
-      let pending = null;
+      let need = null;
+      let reset = null;
       try {
-        pending = window.localStorage.getItem('sinop_pending_pin');
+        need = window.localStorage.getItem(NEED_PIN_KEY);
+        reset = window.localStorage.getItem(RESET_KEY);
+        window.localStorage.removeItem(NEED_PIN_KEY);
+        window.localStorage.removeItem(RESET_KEY);
         window.localStorage.removeItem('sinop_pending_pin');
       } catch {
       }
-      if (pending) {
-        await setSetting(db, 'pin', pending);
-        refreshSettings();
+      if (reset && String(u.email || '').toLowerCase() === reset) {
+        await setSetting(db, 'pin', null);
+        await refreshSettings();
+        setLocked(false);
+        setPinSetup('reset');
+      } else if (need) {
+        const s = await getSettings(db);
+        if (!s.pin) setPinSetup('new');
       }
     }
   }), [db, refreshSettings]);
@@ -223,7 +236,49 @@ function AppShell() {
     return () => sub.remove();
   }, [db, runSync]);
 
+  const verifyAndReset = async () => {
+    const me = String(userRef.current?.email || '').toLowerCase();
+    if (!me) return;
+    if (Platform.OS === 'web') {
+      try {
+        window.localStorage.setItem(RESET_KEY, me);
+      } catch {
+      }
+    }
+    try {
+      const u = await signInWithGoogle();
+      if (!u) return;
+      if (Platform.OS === 'web') {
+        try {
+          window.localStorage.removeItem(RESET_KEY);
+        } catch {
+        }
+      }
+      if (String(u.email || '').toLowerCase() !== me) {
+        Alert.alert('Different account', `Please choose ${me} to reset your PIN.`);
+        return;
+      }
+      await setSetting(db, 'pin', null);
+      await refreshSettings();
+      setLocked(false);
+      setPinSetup('reset');
+    } catch (e) {
+      Alert.alert('Couldn’t verify', e?.message || 'Please try again.');
+    }
+  };
+
   const forgotPin = () => {
+    if (userRef.current?.email) {
+      Alert.alert(
+        'Forgot your PIN? 🔑',
+        `No worries! Sign in again with Google (${userRef.current.email}) to make a new PIN. Your data stays safe.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Verify with Google', onPress: verifyAndReset },
+        ]
+      );
+      return;
+    }
     Alert.alert(
       'Forgot your PIN?',
       'For your privacy, the only way in is to reset Sinop. This deletes ALL your data and can’t be undone.',
@@ -319,6 +374,12 @@ function AppShell() {
           <Stack.Screen name="group/[id]" />
         </Stack>
         <Toast message={toastState.message} stamp={toastState.stamp} action={toastState.action} />
+        <PinSetupSheet
+          visible={!!pinSetup}
+          onClose={() => setPinSetup(null)}
+          title={pinSetup === 'reset' ? 'Make a new PIN 🔑' : 'One more step: create your PIN 🔒'}
+          note={pinSetup === 'reset' ? 'Verified! Pick a new 4-digit PIN. Sinop will ask for it every time you open the app.' : undefined}
+        />
         {locked && settings.pin ? (
           <LockScreen pinHash={settings.pin} useBio={settings.lock_bio === '1'} onUnlock={() => setLocked(false)} onForgot={forgotPin} />
         ) : null}
