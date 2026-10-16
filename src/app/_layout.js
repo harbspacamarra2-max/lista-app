@@ -20,7 +20,7 @@ import { Toast } from '../components/toast';
 import { Alert } from '../lib/alert';
 import { buildTheme, ThemeContext } from '../lib/theme';
 import { DataContext } from '../lib/store';
-import { cancelReminder, onNotificationAction, scheduleBillReminder, setupNotifications } from '../lib/notify';
+import { cancelReminder, onNotificationAction, scheduleBillReminder, scheduleWrappedReminder, setupNotifications } from '../lib/notify';
 import { getBill, getStreak, markNoSpend, payBill, setBillReminder, todaySummary } from '../lib/db';
 import { updateWidget } from '../widget/data';
 import { watchUser, signInWithGoogle, signOutEverywhere } from '../lib/firebase';
@@ -148,6 +148,7 @@ function AppShell() {
   }, [ready, version]);
   useEffect(() => {
     if (!ready) return undefined;
+    scheduleWrappedReminder().catch(() => {});
     return onNotificationAction(async ({ action, isDefault, data }) => {
       try {
         if (data.kind === 'lista-daily-nudge') {
@@ -172,6 +173,8 @@ function AppShell() {
           } else {
             setTimeout(() => router.push('/bills'), 300);
           }
+        } else if (data.kind === 'wrapped') {
+          setTimeout(() => router.push('/wrapped'), 300);
         } else if (data.kind === 'utang' && isDefault) {
           setTimeout(() => router.navigate('/utang'), 300);
         }
@@ -309,6 +312,7 @@ function AppShell() {
           <Stack.Screen name="person/[id]" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="feedback" />
+          <Stack.Screen name="wrapped" options={{ animation: 'fade', presentation: 'fullScreenModal' }} />
           <Stack.Screen name="ask" />
           <Stack.Screen name="wallets" />
           <Stack.Screen name="groups" />

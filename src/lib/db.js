@@ -924,3 +924,70 @@ export async function listTags(db) {
   for (const r of rows) for (const t of r.note.match(/#[A-Za-z0-9_\u00C0-\u024F-]+/g) || []) seen.set(t.toLowerCase(), (seen.get(t.toLowerCase()) || 0) + 1);
   return [...seen.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).slice(0, 12);
 }
+
+export async function getWrapped(db, month) {
+  const from = `${month}-01`;
+  const to = `${month}-31`;
+  const prev = shiftMonth(month, -1);
+  const t = today();
+  const last = t.slice(0, 7) === month ? t : `${month}-${String(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate()).padStart(2, '0')}`;
+  const days = Number(last.slice(8, 10));
+  const q = (sql, ...a) => db.getAllAsync(sql, from, to, ...a);
+  const one = (sql) => db.getFirstAsync(sql, from, to).then((r) => r?.total ?? 0);
+  const [cats, txCount, biggest, notes, daily, utangPeople, lent, collected, paidOut, saved, splits, spent, income, prevSpent, noSpendMarked] = await Promise.all([
+    q(`SELECT COALESCE(c.name, 'Others') AS name, COALESCE(c.emoji, '✨') AS emoji, SUM(t.amount) AS total, COUNT(*) AS count
+       FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+       WHERE t.kind = 'expense' AND t.date >= ? AND t.date <= ? GROUP BY c.id ORDER BY total DESC`),
+    one("SELECT COUNT(*) AS total FROM transactions WHERE kind = 'expense' AND date >= ? AND date <= ?"),
+    db.getFirstAsync(
+      `SELECT t.amount, t.note, t.date, COALESCE(c.emoji, '✨') AS emoji, COALESCE(c.name, 'Others') AS category
+       FROM transactions t LEFT JOIN categories c ON c.id = t.category_id
+       WHERE t.kind = 'expense' AND t.date >= ? AND t.date <= ? ORDER BY t.amount DESC LIMIT 1`,
+      from, to
+    ),
+    q(`SELECT lower(trim(note)) AS k, MIN(trim(note)) AS note, COUNT(*) AS count, SUM(amount) AS total
+       FROM transactions WHERE kind = 'expense' AND date >= ? AND date <= ? AND note IS NOT NULL AND trim(note) <> ''
+       GROUP BY k HAVING count >= 2 ORDER BY count DESC, total DESC LIMIT 1`),
+    q("SELECT date, SUM(amount) AS total FROM transactions WHERE kind = 'expense' AND date >= ? AND date <= ? GROUP BY date"),
+    q(`SELECT p.name, p.emoji, SUM(d.amount) AS total FROM debts d JOIN people p ON p.id = d.person_id
+       WHERE d.direction = 'owed' AND d.date >= ? AND d.date <= ? GROUP BY p.id ORDER BY total DESC LIMIT 1`),
+    one("SELECT COALESCE(SUM(COALESCE(principal, amount)), 0) AS total FROM debts WHERE direction = 'owed' AND date >= ? AND date <= ?"),
+    one("SELECT COALESCE(SUM(p.amount), 0) AS total FROM debt_payments p JOIN debts d ON d.id = p.debt_id WHERE d.direction = 'owed' AND p.date >= ? AND p.date <= ? AND COALESCE(p.note, '') <> 'Quits na (net)'"),
+    one("SELECT COALESCE(SUM(p.amount), 0) AS total FROM debt_payments p JOIN debts d ON d.id = p.debt_id WHERE d.direction = 'owe' AND p.date >= ? AND p.date <= ? AND COALESCE(p.note, '') <> 'Quits na (net)'"),
+    one('SELECT COALESCE(SUM(amount), 0) AS total FROM goal_entries WHERE date >= ? AND date <= ?'),
+    one("SELECT COUNT(DISTINCT date || reason) AS total FROM debts WHERE reason LIKE '%hati-hati%' AND date >= ? AND date <= ?"),
+    sumBetween(db, 'expense', from, to),
+    sumBetween(db, 'income', from, to),
+    sumBetween(db, 'expense', `${prev}-01`, `${prev}-31`),
+    one('SELECT COUNT(*) AS total FROM no_spend_days WHERE date >= ? AND date <= ?'),
+  ]);
+  const spentDays = new Set(daily.filter((d) => d.total > 0).map((d) => d.date));
+  const zeroDays = Math.max(0, days - spentDays.size);
+  const peak = daily.reduce((a, d) => (!a || d.total > a.total ? d : a), null);
+  const byWeekday = [0, 0, 0, 0, 0, 0, 0];
+  daily.forEach((d) => { byWeekday[new Date(`${d.date}T00:00:00`).getDay()] += d.total; });
+  const wd = byWeekday.indexOf(Math.max(...byWeekday));
+  return {
+    month,
+    days,
+    spent,
+    income,
+    prevSpent,
+    txCount,
+    perDay: days ? Math.round(spent / days / 100) * 100 : 0,
+    categories: cats.slice(0, 3),
+    top: cats[0] || null,
+    biggest: biggest || null,
+    suki: notes[0] || null,
+    peak: peak && peak.total > 0 ? peak : null,
+    weekday: spent > 0 ? wd : null,
+    zeroDays,
+    noSpendMarked,
+    lent,
+    collected,
+    paidOut,
+    utangero: utangPeople[0] || null,
+    saved: Math.max(0, saved),
+    splits,
+  };
+}

@@ -68,6 +68,20 @@ export default function Reports() {
         </Card>
       ) : null}
 
+      {r.spent > 0 ? (
+        <Pressable
+          onPress={() => router.push(`/wrapped?month=${month}`)}
+          style={({ pressed }) => ({ marginTop: 12, borderRadius: 18, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#784BA0', transform: [{ scale: pressed ? 0.98 : 1 }] })}
+        >
+          <Txt size={26}>🎁</Txt>
+          <View style={{ flex: 1 }}>
+            <Txt w={800} size={15} color="#FFFFFF">{`${monthName(month)} Wrapped${isCurrent ? ' (so far)' : ''}`}</Txt>
+            <Txt w={600} size={12.5} color="#FFFFFF" style={{ opacity: 0.85 }}>Your month, roasted with love 😂</Txt>
+          </View>
+          <Txt w={800} size={18} color="#FFFFFF">›</Txt>
+        </Pressable>
+      ) : null}
+
       <AiTips month={month} hasData={r.spent > 0} />
 
       <SectionHeader title="Where it went" />

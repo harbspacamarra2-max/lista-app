@@ -17,7 +17,7 @@ import {
   payBill,
   setBillReminder,
 } from '../../lib/db';
-import { addDays, daysBetween, dueLabel, greeting, monthKey, monthName, peso, prettyDate, today } from '../../lib/format';
+import { addDays, daysBetween, daysInMonth, dueLabel, greeting, monthKey, monthName, peso, prettyDate, shiftMonth, today } from '../../lib/format';
 import { cancelReminder, scheduleBillReminder } from '../../lib/notify';
 import { aiReady } from '../../lib/ai';
 import { pick } from '../../lib/quips';
@@ -76,7 +76,12 @@ export default function Home() {
       getWallets(db),
       listGroups(db),
     ]);
+    const prevM = shiftMonth(monthKey(), -1);
+    const prevCount = Number(today().slice(8, 10)) <= 7
+      ? (await db.getFirstAsync('SELECT COUNT(*) AS n FROM transactions WHERE date >= ? AND date <= ?', `${prevM}-01`, `${prevM}-31`))?.n || 0
+      : 0;
     return {
+      wrappedMonth: prevCount > 0 ? prevM : null,
       overview, utang, recent, streak, goals, budgets, categories, bills,
       wallets: { used: wallets.some((w) => w.setUp), total: wallets.reduce((t, w) => t + w.balance, 0) },
       groups: groups.length,
@@ -92,6 +97,11 @@ export default function Home() {
   const usedAmt = o.usedMonth ?? o.spentMonth;
   const left = budget - usedAmt;
   const used = budget ? usedAmt / budget : 0;
+  const dayNum = Number(today().slice(8, 10));
+  const daysLeft = Math.max(1, daysInMonth(monthKey()) - dayNum + 1);
+  const usedBeforeToday = usedAmt - (o.spentToday || 0);
+  const perDay = budget ? Math.max(0, Math.floor((budget - usedBeforeToday) / daysLeft / 100) * 100) : 0;
+  const todayLeft = perDay - (o.spentToday || 0);
   const outParts = [
     o.lentMonth ? `${peso(o.lentMonth)} lent out` : '',
     o.savedMonth ? `${peso(o.savedMonth)} to ipon` : '',
@@ -211,6 +221,22 @@ export default function Home() {
         </Card>
       ) : null}
 
+      {data?.wrappedMonth ? (
+        <Pressable
+          onPress={() => router.push(`/wrapped?month=${data.wrappedMonth}`)}
+          style={({ pressed }) => ({ marginBottom: 12, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: '#784BA0', transform: [{ scale: pressed ? 0.98 : 1 }] })}
+        >
+          <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FF3CAC' }}>
+            <Txt size={34}>🎁</Txt>
+            <View style={{ flex: 1 }}>
+              <Txt w={800} size={16} color="#FFFFFF">{`Your ${monthName(data.wrappedMonth)} Wrapped is here!`}</Txt>
+              <Txt w={600} size={12.5} color="#FFFFFF" style={{ opacity: 0.9 }}>Saan napunta pera mo? Brace yourself. 😭</Txt>
+            </View>
+            <Ionicons name="play-circle" size={30} color="#FFFFFF" />
+          </View>
+        </Pressable>
+      ) : null}
+
       <GradientCard>
         <Txt w={600} size={14} color={theme.onBrand} style={{ opacity: 0.85 }}>
           {budget ? `Left to spend in ${month}` : `Spent in ${month}`}
@@ -238,6 +264,26 @@ export default function Home() {
                 Includes {outParts.join(', ')}
               </Txt>
             ) : null}
+            <View style={{ marginTop: 12, backgroundColor: 'rgba(255,255,255,0.16)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10 }}>
+              {left <= 0 ? (
+                <Txt w={700} size={13.5} color={theme.onBrand}>Wala nang pwedeng gastusin this month 😭 Survival mode muna.</Txt>
+              ) : todayLeft >= 0 ? (
+                <>
+                  <Txt w={600} size={12.5} color={theme.onBrand} style={{ opacity: 0.85 }}>Pwede pang gastusin today</Txt>
+                  <Txt w={800} size={20} color={theme.onBrand}>{peso(todayLeft)}</Txt>
+                  <Txt w={600} size={12} color={theme.onBrand} style={{ opacity: 0.8 }}>
+                    {`${peso(perDay)}/day for the next ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} 👍`}
+                  </Txt>
+                </>
+              ) : (
+                <>
+                  <Txt w={700} size={13.5} color={theme.onBrand}>{`Sobra ka na today by ${peso(-todayLeft)} 😅`}</Txt>
+                  <Txt w={600} size={12} color={theme.onBrand} style={{ opacity: 0.8 }}>
+                    {`Bawi bukas! Your daily limit is ${peso(perDay)} for the next ${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}.`}
+                  </Txt>
+                </>
+              )}
+            </View>
           </View>
         ) : (
           <Pressable onPress={() => router.push('/settings')}>

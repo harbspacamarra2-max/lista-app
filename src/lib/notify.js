@@ -167,3 +167,32 @@ export async function setDailyNudge(enabled) {
     return false;
   }
 }
+
+const WRAPPED_KEY = 'wrapped';
+
+export async function scheduleWrappedReminder() {
+  if (!Notifications) return false;
+  try {
+    const perm = await Notifications.getPermissionsAsync();
+    if (!perm.granted) return false;
+    const all = await Notifications.getAllScheduledNotificationsAsync();
+    if (all.some((n) => n.content?.data?.kind === WRAPPED_KEY)) return true;
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Your Sinop Wrapped is here! 🎁',
+        body: 'Saan napunta pera mo last month? Tara, alamin natin. Brace yourself. 😭',
+        data: { kind: WRAPPED_KEY },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.MONTHLY,
+        day: 1,
+        hour: 10,
+        minute: 0,
+        channelId: 'daily',
+      },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
