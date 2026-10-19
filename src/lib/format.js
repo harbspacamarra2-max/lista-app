@@ -105,6 +105,27 @@ export function daysInMonth(key) {
   return new Date(y, m, 0).getDate();
 }
 
+export const WRAPPED_HOUR = 20;
+
+export function wrappedDrop(key) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, daysInMonth(key), WRAPPED_HOUR, 0, 0);
+}
+
+export function wrappedOpen(key, now = new Date()) {
+  return now >= wrappedDrop(key);
+}
+
+export function latestWrapped(now = new Date()) {
+  const cur = monthKey(toISODate(now));
+  return wrappedOpen(cur, now) ? cur : shiftMonth(cur, -1);
+}
+
+export function wrappedDropLabel(key) {
+  const [, m] = key.split('-').map(Number);
+  return `${MONTHS_LONG[m - 1]} ${daysInMonth(key)}, 8 PM`;
+}
+
 export function startOfWeek(iso = today()) {
   const d = parseISODate(iso);
   const day = (d.getDay() + 6) % 7;

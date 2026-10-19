@@ -17,7 +17,7 @@ import {
   payBill,
   setBillReminder,
 } from '../../lib/db';
-import { addDays, daysBetween, daysInMonth, dueLabel, greeting, monthKey, monthName, peso, prettyDate, shiftMonth, today } from '../../lib/format';
+import { addDays, daysBetween, daysInMonth, dueLabel, greeting, latestWrapped, monthKey, monthName, peso, prettyDate, shiftMonth, today } from '../../lib/format';
 import { cancelReminder, scheduleBillReminder } from '../../lib/notify';
 import { aiReady } from '../../lib/ai';
 import { pick } from '../../lib/quips';
@@ -77,12 +77,13 @@ export default function Home() {
       getWallets(db),
       listGroups(db),
     ]);
-    const prevM = shiftMonth(monthKey(), -1);
-    const prevCount = Number(today().slice(8, 10)) <= 7
-      ? (await db.getFirstAsync('SELECT COUNT(*) AS n FROM transactions WHERE date >= ? AND date <= ?', `${prevM}-01`, `${prevM}-31`))?.n || 0
+    const wm = latestWrapped();
+    const fresh = wm === monthKey() || Number(today().slice(8, 10)) <= 7;
+    const wmCount = fresh
+      ? (await db.getFirstAsync('SELECT COUNT(*) AS n FROM transactions WHERE date >= ? AND date <= ?', `${wm}-01`, `${wm}-31`))?.n || 0
       : 0;
     return {
-      wrappedMonth: prevCount > 0 ? prevM : null,
+      wrappedMonth: wmCount > 0 ? wm : null,
       overview, utang, recent, streak, goals, budgets, categories, bills,
       wallets: { used: wallets.some((w) => w.setUp), total: wallets.reduce((t, w) => t + w.balance, 0) },
       groups: groups.length,

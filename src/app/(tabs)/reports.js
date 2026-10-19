@@ -4,7 +4,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { PAYMENT_METHODS, getBudgetStatus, getMonthReport, getTagReport, setSetting, spendingByMethod } from '../../lib/db';
 import { aiReady, aiTips, friendlyAiError } from '../../lib/ai';
 import { buildSnapshot } from '../../lib/snapshot';
-import { daysInMonth, monthKey, monthLabel, monthName, peso, shiftMonth, today } from '../../lib/format';
+import { daysInMonth, monthKey, monthLabel, monthName, peso, shiftMonth, today, wrappedDropLabel, wrappedOpen } from '../../lib/format';
 import { useData, useQuery, useSettings } from '../../lib/store';
 import { swatch, useTheme } from '../../lib/theme';
 import { Card, EmptyState, ProgressBar, Row, Screen, SectionHeader, Title, Txt } from '../../components/ui';
@@ -68,18 +68,26 @@ export default function Reports() {
         </Card>
       ) : null}
 
-      {r.spent > 0 ? (
+      {r.spent > 0 && wrappedOpen(month) ? (
         <Pressable
           onPress={() => router.push(`/wrapped?month=${month}`)}
           style={({ pressed }) => ({ marginTop: 12, borderRadius: 18, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#784BA0', transform: [{ scale: pressed ? 0.98 : 1 }] })}
         >
           <Txt size={26}>🎁</Txt>
           <View style={{ flex: 1 }}>
-            <Txt w={800} size={15} color="#FFFFFF">{`${monthName(month)} Wrapped${isCurrent ? ' (so far)' : ''}`}</Txt>
+            <Txt w={800} size={15} color="#FFFFFF">{`${monthName(month)} Wrapped`}</Txt>
             <Txt w={600} size={12.5} color="#FFFFFF" style={{ opacity: 0.85 }}>Your month, roasted with love 😂</Txt>
           </View>
           <Txt w={800} size={18} color="#FFFFFF">›</Txt>
         </Pressable>
+      ) : r.spent > 0 && isCurrent ? (
+        <View style={{ marginTop: 12, borderRadius: 18, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.card, borderWidth: 1.5, borderColor: theme.border, borderStyle: 'dashed' }}>
+          <Txt size={26}>🔒</Txt>
+          <View style={{ flex: 1 }}>
+            <Txt w={800} size={15}>{`${monthName(month)} Wrapped`}</Txt>
+            <Txt w={600} size={12.5} color="sub">{`Surprise pa! Drops on ${wrappedDropLabel(month)} 👀`}</Txt>
+          </View>
+        </View>
       ) : null}
 
       <AiTips month={month} hasData={r.spent > 0} />

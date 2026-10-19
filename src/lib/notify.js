@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import { parseISODate } from './format';
+import { monthKey, monthName, parseISODate, shiftMonth, toISODate, wrappedDrop } from './format';
 import { peso } from './format';
 
 let Notifications = null;
@@ -176,21 +176,24 @@ export async function scheduleWrappedReminder() {
     const perm = await Notifications.getPermissionsAsync();
     if (!perm.granted) return false;
     const all = await Notifications.getAllScheduledNotificationsAsync();
-    if (all.some((n) => n.content?.data?.kind === WRAPPED_KEY)) return true;
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Your Sinop Wrapped is here! 🎁',
-        body: 'Saan napunta pera mo last month? Tara, alamin natin. Brace yourself. 😭',
-        data: { kind: WRAPPED_KEY },
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.MONTHLY,
-        day: 1,
-        hour: 10,
-        minute: 0,
-        channelId: 'daily',
-      },
-    });
+    const mine = all.filter((n) => n.content?.data?.kind === WRAPPED_KEY);
+    if (mine.length >= 6 && mine.every((n) => n.content?.data?.month)) return true;
+    for (const n of mine) await Notifications.cancelScheduledNotificationAsync(n.identifier);
+    const now = new Date();
+    let key = monthKey(toISODate(now));
+    for (let i = 0; i < 12; i++, key = shiftMonth(key, 1)) {
+      const when = wrappedDrop(key);
+      if (when <= now) continue;
+      const name = monthName(key);
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `Your ${name} Wrapped is here! 🎁`,
+          body: `Tapos na ang ${name}! Saan napunta pera mo? Tara, alamin natin. Brace yourself. 😭`,
+          data: { kind: WRAPPED_KEY, month: key },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: when, channelId: 'daily' },
+      });
+    }
     return true;
   } catch {
     return false;

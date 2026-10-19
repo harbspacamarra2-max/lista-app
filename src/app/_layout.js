@@ -187,7 +187,7 @@ function AppShell() {
             setTimeout(() => router.push('/bills'), 300);
           }
         } else if (data.kind === 'wrapped') {
-          setTimeout(() => router.push('/wrapped'), 300);
+          setTimeout(() => router.push(data.month ? `/wrapped?month=${data.month}` : '/wrapped'), 300);
         } else if (data.kind === 'utang' && isDefault) {
           setTimeout(() => router.navigate('/utang'), 300);
         }

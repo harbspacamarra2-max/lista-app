@@ -7,7 +7,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { getWrapped } from '../lib/db';
-import { monthKey, monthLabel, monthName, peso, shiftMonth } from '../lib/format';
+import { latestWrapped, monthKey, monthLabel, monthName, peso, shiftMonth, wrappedDropLabel, wrappedOpen } from '../lib/format';
 import { useSettings } from '../lib/store';
 import { fonts } from '../lib/theme';
 import { buildSlides, hasWrapped, shareText, summaryLines } from '../lib/wrapped';
@@ -23,13 +23,18 @@ export default function Wrapped() {
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  const month = /^\d{4}-\d{2}$/.test(String(params.month || '')) ? String(params.month) : shiftMonth(monthKey(), -1);
+  const month = /^\d{4}-\d{2}$/.test(String(params.month || '')) ? String(params.month) : latestWrapped();
+  const locked = !wrappedOpen(month);
   const [data, setData] = useState(null);
   const [index, setIndex] = useState(0);
   const progress = useRef(new Animated.Value(0)).current;
   const shotRef = useRef(null);
 
   useEffect(() => {
+    if (locked) {
+      setData({ month, empty: true });
+      return;
+    }
     getWrapped(db, month).then(setData).catch(() => setData({ month, empty: true }));
   }, [db, month]);
 
@@ -86,9 +91,9 @@ export default function Wrapped() {
         <StatusBar style="light" />
         <Backdrop id="empty" palette={['#434343', '#000000']} width={width} height={height} />
         <View style={{ flex: 1, justifyContent: 'center', padding: 28, paddingTop: insets.top + 20 }}>
-          <Text style={{ fontSize: 64, textAlign: 'center' }}>📭</Text>
-          <Text style={[styles.title(width), { textAlign: 'center', marginTop: 16 }]}>Wala pang laman ang {monthName(month)} mo.</Text>
-          <Text style={[styles.body, { textAlign: 'center', marginTop: 12 }]}>Log your gastos this month, tapos balikan mo ang Wrapped mo sa 1st. 🎁</Text>
+          <Text style={{ fontSize: 64, textAlign: 'center' }}>{locked ? '🔒' : '📭'}</Text>
+          <Text style={[styles.title(width), { textAlign: 'center', marginTop: 16 }]}>{locked ? `Surprise pa ang ${monthName(month)} Wrapped mo!` : `Wala pang laman ang ${monthName(month)} mo.`}</Text>
+          <Text style={[styles.body, { textAlign: 'center', marginTop: 12 }]}>{locked ? `Drops on ${wrappedDropLabel(month)}. Bawal sumilip. 👀🎁` : 'Log your gastos this month, tapos balikan mo ang Wrapped mo sa last day ng month. 🎁'}</Text>
           <Pressable onPress={close} style={styles.cta}><Text style={styles.ctaText}>Okay 👍</Text></Pressable>
         </View>
       </View>
